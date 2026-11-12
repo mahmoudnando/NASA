@@ -34,7 +34,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccessNavigate }) => {
   const isAr = language === 'ar';
 
   const [username, setUsername] = useState('astro.vance');
-  const [password, setPassword] = useState('Nasa@2026!');
+  const [password, setPassword] = useState('Astro#2026!Vance');
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{
     type: 'success' | 'error' | 'warning';
@@ -44,6 +44,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccessNavigate }) => {
   const seededAccounts = [
     {
       username: 'astro.vance',
+      password: 'Astro#2026!Vance',
       fullNameAr: 'مورغان فانس',
       fullNameEn: 'Morgan Vance',
       code: 'AST-001',
@@ -55,6 +56,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccessNavigate }) => {
     },
     {
       username: 'astro.lee',
+      password: 'Astro#2026!Vance',
       fullNameAr: 'جوردان لي',
       fullNameEn: 'Jordan Lee',
       code: 'AST-002',
@@ -66,6 +68,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccessNavigate }) => {
     },
     {
       username: 'astro.quinn',
+      password: 'Astro#2026!Vance',
       fullNameAr: 'تايلور كوين',
       fullNameEn: 'Taylor Quinn',
       code: 'AST-003',
@@ -77,6 +80,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccessNavigate }) => {
     },
     {
       username: 'monitor.rivera',
+      password: 'Monitor#2026!Rivera',
       fullNameAr: 'د. كيسي ريفيرا',
       fullNameEn: 'Dr. Casey Rivera',
       code: 'MED-CONTROL',
@@ -134,6 +138,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccessNavigate }) => {
   };
 
   const handleAccountCardClick = (acc: (typeof seededAccounts)[number]) => {
+    setUsername(acc.username);
+    setPassword(acc.password);
+
     if (isAuthenticated) {
       if (activeAccount === acc.username) {
         setStatusMsg({
@@ -146,21 +153,52 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccessNavigate }) => {
         setStatusMsg({
           type: 'warning',
           text: isAr
-            ? `أنت مسجل حالياً بحساب آخر. يجب الضغط على "تسجيل الخروج" أولاً لتتمكن من التبديل إلى حساب ${acc.fullNameAr} ومنع أي تداخل في الجلسات والمحادثات.`
-            : `You are currently signed in. Please log out first before switching to ${acc.fullNameEn} to prevent session and chat message collision.`,
+            ? `أنت مسجل حالياً بحساب ${currentUserName}. يمكنك الضغط على "تبديل ودخول مباشر" للتحويل إلى حساب ${acc.fullNameAr} فوراً دون أي تداخل في الجلسات.`
+            : `You are signed in as ${currentUserName}. Click "Switch & Sign In" to switch to ${acc.fullNameEn} safely.`,
         });
       }
       return;
     }
 
-    setUsername(acc.username);
-    setPassword('Nasa@2026!');
     setStatusMsg({
       type: 'success',
       text: isAr
-        ? `تم تجهيز بيانات ${acc.fullNameAr} (${acc.roleLabelAr}). اضغط الآن على "تسجيل الدخول إلى النظام".`
-        : `Selected ${acc.fullNameEn} (${acc.roleLabelEn}). Click "Sign In to Console" to authenticate.`,
+        ? `تم تحديد ${acc.fullNameAr} (${acc.roleLabelAr}). اضغط الآن على "تسجيل الدخول إلى النظام" أو زر الدخول الفوري بالبطاقة.`
+        : `Selected ${acc.fullNameEn} (${acc.roleLabelEn}). Click "Sign In to Console" or the Quick Login button.`,
     });
+  };
+
+  const handleQuickLogin = async (acc: (typeof seededAccounts)[number]) => {
+    setLoading(true);
+    setStatusMsg(null);
+    setUsername(acc.username);
+    setPassword(acc.password);
+
+    if (isAuthenticated) {
+      await logout();
+    }
+
+    const res = await login(acc.username, acc.password);
+    setLoading(false);
+
+    if (res.success) {
+      setStatusMsg({
+        type: 'success',
+        text: isAr
+          ? `تم تسجيل الدخول بنجاح بحساب: ${acc.fullNameAr}`
+          : `Signed in successfully as ${acc.fullNameEn}`,
+      });
+      if (onSuccessNavigate) {
+        setTimeout(() => onSuccessNavigate(acc.targetPage), 500);
+      }
+    } else {
+      setStatusMsg({
+        type: 'error',
+        text: isAr
+          ? `تعذر تسجيل الدخول: ${res.message || 'بيانات الدخول غير صحيحة.'}`
+          : `Login failed: ${res.message || 'Invalid credentials.'}`,
+      });
+    }
   };
 
   const handleLogoutClick = async () => {
@@ -453,29 +491,39 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccessNavigate }) => {
                     </p>
                   </div>
 
-                  <div className="pt-2 border-t border-white/10 flex items-center justify-between text-[11px]">
+                  <div className="pt-2 border-t border-white/10 flex items-center justify-between gap-2 text-[11px]">
                     <span className="text-slate-400 font-mono">{acc.code}</span>
-                    <span
-                      className={`font-bold ${
-                        isSelected
-                          ? 'text-emerald-300'
-                          : isAuthenticated
-                          ? 'text-slate-400'
-                          : 'text-cyan-300'
-                      }`}
-                    >
-                      {isSelected
-                        ? isAr
-                          ? 'الحساب النشط حالياً'
-                          : 'Current Active'
-                        : isAuthenticated
-                        ? isAr
-                          ? 'سجّل الخروج للتبديل'
-                          : 'Log Out to Switch'
-                        : isAr
-                        ? 'انقر لتجهيز الدخول ←'
-                        : 'Click to select →'}
-                    </span>
+                    {isSelected ? (
+                      <span className="font-extrabold text-emerald-300">
+                        {isAr ? 'الجلسة النشطة حالياً' : 'Current Active Session'}
+                      </span>
+                    ) : isAuthenticated ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleQuickLogin(acc);
+                        }}
+                        disabled={loading}
+                        className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-200 font-bold text-[10px] flex items-center gap-1 transition-all cursor-pointer"
+                      >
+                        <LogOut className="w-2.5 h-2.5" />
+                        <span>{isAr ? 'خروج وتبديل لهذا الحساب' : 'Switch & Sign In'}</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleQuickLogin(acc);
+                        }}
+                        disabled={loading}
+                        className="px-2.5 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/40 text-cyan-200 font-bold text-[10px] flex items-center gap-1 transition-all cursor-pointer"
+                      >
+                        <UserCheck className="w-2.5 h-2.5" />
+                        <span>{isAr ? 'دخول فوري مباشر ←' : 'Quick Sign In →'}</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               );

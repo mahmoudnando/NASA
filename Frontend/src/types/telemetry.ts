@@ -181,6 +181,8 @@ export interface ChatMessage {
   senderUserId: string;
   senderName?: string;
   senderRole: 'Astronaut' | 'Monitor';
+  recipientName?: string;
+  recipientRole?: string;
   content: string;
   sentAt: string;
   readAt?: string | null;

@@ -11,9 +11,27 @@ import {
   Shield,
   Clock,
   Sparkles,
+  UserCheck,
+  Building2,
+  BrainCircuit,
+  ArrowRight,
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useTelemetry } from '../../context/TelemetryContext';
+
+interface RecipientOption {
+  id: string;
+  role: 'Astronaut' | 'Monitor';
+  astronautId?: number;
+  titleAr: string;
+  titleEn: string;
+  roleLabelAr: string;
+  roleLabelEn: string;
+  badgeAr: string;
+  badgeEn: string;
+  iconType: 'doctor' | 'control' | 'behavioral' | 'astronaut';
+  code: string;
+}
 
 export const GroundOrbitChatPage: React.FC = () => {
   const { language } = useLanguage();
@@ -24,6 +42,7 @@ export const GroundOrbitChatPage: React.FC = () => {
     currentRole,
     currentUserName,
     currentUserCode,
+    activeAccount,
     selectedChatAstronautId,
     setSelectedChatAstronautId,
     crewMembers,
@@ -35,7 +54,137 @@ export const GroundOrbitChatPage: React.FC = () => {
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Find currently selected astronaut for doctor view
+  // All prospective recipients available across the mission network
+  const allRecipients: RecipientOption[] = [
+    {
+      id: 'doctor-rivera',
+      role: 'Monitor',
+      titleAr: 'د. كيسي ريفيرا',
+      titleEn: 'Dr. Casey Rivera',
+      roleLabelAr: 'طبيب الرحلة الرئيسي',
+      roleLabelEn: 'Lead Flight Surgeon',
+      badgeAr: 'المركز الطبي الأرضي',
+      badgeEn: 'Ground Medical Desk',
+      iconType: 'doctor',
+      code: 'MED-SURGEON',
+      astronautId: 1,
+    },
+    {
+      id: 'mcc-ground',
+      role: 'Monitor',
+      titleAr: 'مركز العمليات الطبية - هيوستن',
+      titleEn: 'Mission Control Medical Console',
+      roleLabelAr: 'غرفة الدعم الطبي الأرضي المستمر',
+      roleLabelEn: 'Continuous Medical Operations Desk',
+      badgeAr: 'مركز المراقبة MCC',
+      badgeEn: 'Flight Ops Desk',
+      iconType: 'control',
+      code: 'MCC-HOUSTON',
+      astronautId: 1,
+    },
+    {
+      id: 'behavioral-support',
+      role: 'Monitor',
+      titleAr: 'أخصائي الدعم النفسي والفسيولوجي',
+      titleEn: 'Bio-Behavioral Health Officer',
+      roleLabelAr: 'متابعة جودة النوم والراحة والبيئة',
+      roleLabelEn: 'Circadian, Sleep & Stress Specialist',
+      badgeAr: 'الصحة السلوكية',
+      badgeEn: 'Behavioral Health',
+      iconType: 'behavioral',
+      code: 'MED-PSYCH',
+      astronautId: 1,
+    },
+    {
+      id: 'astro-vance',
+      role: 'Astronaut',
+      astronautId: 1,
+      titleAr: 'مورغان فانس',
+      titleEn: 'Morgan Vance',
+      roleLabelAr: 'قائد المهمة (AST-001)',
+      roleLabelEn: 'Commander (AST-001)',
+      badgeAr: 'طاقم المركبة',
+      badgeEn: 'Flight Crew',
+      iconType: 'astronaut',
+      code: 'AST-001',
+    },
+    {
+      id: 'astro-lee',
+      role: 'Astronaut',
+      astronautId: 2,
+      titleAr: 'جوردان لي',
+      titleEn: 'Jordan Lee',
+      roleLabelAr: 'مهندس طيران (AST-002)',
+      roleLabelEn: 'Flight Engineer (AST-002)',
+      badgeAr: 'طاقم المركبة',
+      badgeEn: 'Flight Crew',
+      iconType: 'astronaut',
+      code: 'AST-002',
+    },
+    {
+      id: 'astro-quinn',
+      role: 'Astronaut',
+      astronautId: 3,
+      titleAr: 'تايلور كوين',
+      titleEn: 'Taylor Quinn',
+      roleLabelAr: 'أخصائي حمولة (AST-003)',
+      roleLabelEn: 'Payload Specialist (AST-003)',
+      badgeAr: 'طاقم المركبة',
+      badgeEn: 'Flight Crew',
+      iconType: 'astronaut',
+      code: 'AST-003',
+    },
+  ];
+
+  // Exclude current user from recipient candidates
+  const availableRecipients = allRecipients.filter((r) => {
+    if (currentRole === 'Monitor' && r.id === 'doctor-rivera') return false;
+    if (activeAccount === 'astro.vance' && r.id === 'astro-vance') return false;
+    if (activeAccount === 'astro.lee' && r.id === 'astro-lee') return false;
+    if (activeAccount === 'astro.quinn' && r.id === 'astro-quinn') return false;
+    return true;
+  });
+
+  // Default active recipient based on role
+  const initialRecipientId =
+    currentRole === 'Monitor'
+      ? selectedChatAstronautId === 2
+        ? 'astro-lee'
+        : selectedChatAstronautId === 3
+        ? 'astro-quinn'
+        : 'astro-vance'
+      : 'doctor-rivera';
+
+  const [selectedRecipientId, setSelectedRecipientId] = useState<string>(initialRecipientId);
+
+  // Sync recipient state when role or active astronaut changes
+  useEffect(() => {
+    if (currentRole === 'Monitor') {
+      const matchAstro =
+        selectedChatAstronautId === 2
+          ? 'astro-lee'
+          : selectedChatAstronautId === 3
+          ? 'astro-quinn'
+          : 'astro-vance';
+      setSelectedRecipientId(matchAstro);
+    } else {
+      setSelectedRecipientId((prev) => (prev.startsWith('astro') ? prev : 'doctor-rivera'));
+    }
+  }, [currentRole, selectedChatAstronautId]);
+
+  const activeRecipient =
+    availableRecipients.find((r) => r.id === selectedRecipientId) ||
+    availableRecipients[0] ||
+    allRecipients[0];
+
+  const handleSelectRecipient = (rec: RecipientOption) => {
+    setSelectedRecipientId(rec.id);
+    if (currentRole === 'Monitor' && rec.astronautId) {
+      setSelectedChatAstronautId(rec.astronautId);
+    }
+  };
+
+  // Find currently selected astronaut for doctor thread view
   const activeAstronaut =
     crewMembers.find((c) => c.id === selectedChatAstronautId) ||
     crewMembers[0] || {
@@ -63,7 +212,14 @@ export const GroundOrbitChatPage: React.FC = () => {
     setMessageText('');
     setSending(true);
     try {
-      await sendChatMessage(text, currentRole, selectedChatAstronautId);
+      const recipientLabel = isAr ? activeRecipient.titleAr : activeRecipient.titleEn;
+      const recipientRoleLabel = isAr ? activeRecipient.roleLabelAr : activeRecipient.roleLabelEn;
+      const targetAstroId =
+        currentRole === 'Monitor'
+          ? activeRecipient.astronautId || selectedChatAstronautId
+          : undefined;
+
+      await sendChatMessage(text, currentRole, targetAstroId, recipientLabel, recipientRoleLabel);
     } finally {
       setSending(false);
     }
@@ -98,6 +254,19 @@ export const GroundOrbitChatPage: React.FC = () => {
           'Please review latest sleep architecture and shift directives.',
         ];
 
+  const renderIcon = (type: RecipientOption['iconType']) => {
+    switch (type) {
+      case 'doctor':
+        return <Stethoscope className="w-4 h-4 text-cyan-300" />;
+      case 'control':
+        return <Radio className="w-4 h-4 text-emerald-300" />;
+      case 'behavioral':
+        return <BrainCircuit className="w-4 h-4 text-purple-300" />;
+      case 'astronaut':
+        return <User className="w-4 h-4 text-blue-300" />;
+    }
+  };
+
   return (
     <div className="glass-panel rounded-[22px] p-5 flex flex-col gap-4 animate-fade-in">
       {/* Top Consultation Channel Header */}
@@ -105,12 +274,12 @@ export const GroundOrbitChatPage: React.FC = () => {
         <div className="flex flex-wrap items-center justify-between gap-3">
           {/* Channel Title */}
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-400/30 flex items-center justify-center text-cyan-300">
+            <div className="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-400/30 flex items-center justify-center text-cyan-300 shadow-sm">
               <MessageSquare className="w-5 h-5" />
             </div>
             <div>
               <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <span>{isAr ? 'الاستشارة الطبية المباشرة' : 'Ground-Orbit Telemedicine'}</span>
+                <span>{isAr ? 'الاستشارة الطبية المباشرة والمحادثات' : 'Ground-Orbit Telemedicine'}</span>
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/15 text-emerald-300 border border-emerald-400/30">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
                   {isOnline ? (isAr ? 'ناقل المحطة مباشر' : 'SignalR Live') : (isAr ? 'وضع غير متصل' : 'Offline')}
@@ -118,78 +287,93 @@ export const GroundOrbitChatPage: React.FC = () => {
               </h3>
               <p className="text-xs text-slate-300">
                 {isAr
-                  ? 'قناة اتصال مشفرة بين طاقم المركبة والمركز الطبي الأرضي'
+                  ? 'قناة اتصال مشفرة وموجهة بين أفراد الطاقم والمركز الطبي الأرضي'
                   : 'Encrypted bidirectional telemetry & clinical chat channel'}
               </p>
             </div>
           </div>
 
-          {/* Active Participants Identification Bar */}
-          <div className="flex flex-wrap items-center gap-2">
-            {currentRole === 'Monitor' ? (
-              // Doctor view: Dropdown to select which Astronaut to chat with
-              <div className="flex items-center gap-2 bg-slate-900/80 px-3 py-1.5 rounded-xl border border-cyan-400/40 shadow-sm">
-                <Users className="w-4 h-4 text-cyan-400 shrink-0" />
-                <span className="text-xs text-slate-300 font-semibold">
-                  {isAr ? 'محادثة الرائد:' : 'Active Thread:'}
-                </span>
-                <select
-                  value={selectedChatAstronautId}
-                  onChange={(e) => setSelectedChatAstronautId(Number(e.target.value))}
-                  className="bg-slate-950 text-xs font-bold text-cyan-200 border border-white/10 rounded-lg px-2 py-1 focus:outline-none focus:border-cyan-400 cursor-pointer"
-                >
-                  {crewMembers.map((c) => (
-                    <option key={c.id} value={c.id} className="bg-slate-900 text-white">
-                      {isAr ? c.fullNameAr : c.fullName} ({c.astronautCode})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ) : (
-              // Astronaut view: Clearly indicates connection with the Flight Surgeon
-              <div className="flex items-center gap-2.5 bg-slate-900/80 px-3.5 py-1.5 rounded-xl border border-blue-400/40 text-xs font-bold text-cyan-200 shadow-sm">
-                <div className="w-6 h-6 rounded-lg bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center text-cyan-300">
-                  <Stethoscope className="w-3.5 h-3.5" />
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 block font-normal">
-                    {isAr ? 'المستقبل الطبي المعتمد' : 'Flight Surgeon Support'}
-                  </span>
-                  <span>
-                    {isAr
-                      ? 'د. كيسي ريفيرا (طبيب الرحلة الأرضي)'
-                      : 'Dr. Casey Rivera (Flight Surgeon)'}
-                  </span>
-                </div>
-              </div>
-            )}
+          {/* Current Sender Status Indicator */}
+          <div className="flex items-center gap-2 bg-slate-900/80 px-3.5 py-1.5 rounded-xl border border-cyan-400/30 shadow-sm text-xs font-bold text-cyan-200">
+            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+            <span className="text-slate-400">{isAr ? 'حسابك النشط:' : 'You:'}</span>
+            <span className="text-white font-extrabold">{currentUserName}</span>
+            <span className="text-[10px] font-mono text-cyan-300 px-1.5 py-0.5 rounded bg-white/10">
+              {currentUserCode || (currentRole === 'Monitor' ? 'MED-SURGEON' : 'AST-001')}
+            </span>
           </div>
         </div>
 
-        {/* Sender & Target Summary Banner */}
+        {/* ── RECIPIENT SELECTOR (من تريد مراسلته؟) ── */}
+        <div className="mt-1 p-3.5 rounded-2xl bg-slate-900/80 border border-cyan-400/25 flex flex-col gap-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-bold text-white flex items-center gap-2">
+              <Users className="w-4 h-4 text-cyan-400" />
+              <span>{isAr ? 'اختر المستقبل (من تريد إرسال الرسالة إليه؟):' : 'Select Target Recipient:'}</span>
+            </span>
+            <span className="text-[10px] text-cyan-300 font-semibold bg-cyan-500/15 border border-cyan-400/30 px-2 py-0.5 rounded-full">
+              {isAr ? 'انقر على أي شخص للتواصل معه مباشرة' : 'Click to direct messages'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+            {availableRecipients.map((rec) => {
+              const isSelected = rec.id === activeRecipient.id;
+              return (
+                <button
+                  key={rec.id}
+                  type="button"
+                  onClick={() => handleSelectRecipient(rec)}
+                  className={`p-2.5 rounded-xl border text-start transition-all flex flex-col justify-between gap-1.5 cursor-pointer ${
+                    isSelected
+                      ? 'bg-gradient-to-br from-cyan-500/25 to-blue-600/25 border-cyan-400 shadow-[0_0_18px_rgba(34,211,238,0.3)] ring-1 ring-cyan-400'
+                      : 'bg-slate-950/60 border-white/10 hover:border-cyan-400/40 hover:bg-slate-900/80'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-1.5">
+                    <div className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+                      {renderIcon(rec.iconType)}
+                    </div>
+                    {isSelected ? (
+                      <span className="inline-flex items-center gap-1 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full bg-cyan-400/20 text-cyan-200 border border-cyan-400/40">
+                        <Check className="w-2.5 h-2.5" />
+                        <span>{isAr ? 'محدد' : 'Active'}</span>
+                      </span>
+                    ) : (
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" title="Online" />
+                    )}
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-bold text-white truncate">
+                      {isAr ? rec.titleAr : rec.titleEn}
+                    </p>
+                    <p className="text-[10px] text-slate-300 truncate">
+                      {isAr ? rec.roleLabelAr : rec.roleLabelEn}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Active Channel Target Summary Banner */}
         <div className="p-2.5 rounded-xl bg-slate-900/60 border border-white/10 flex flex-wrap items-center justify-between gap-2 text-xs">
           <div className="flex items-center gap-2">
-            <span className="text-slate-400">{isAr ? 'أنت المُرسِل:' : 'You are:'}</span>
-            <span className="font-extrabold text-white flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-cyan-400" />
-              {currentUserName}
-              <span className="text-[11px] font-mono text-cyan-300">
-                ({currentUserCode || (currentRole === 'Monitor' ? 'MED-SURGEON' : 'AST-001')})
+            <span className="text-slate-400">{isAr ? 'القناة المفتوحة موجهة إلى:' : 'Direct Channel With:'}</span>
+            <span className="font-extrabold text-cyan-200 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+              <span>{isAr ? activeRecipient.titleAr : activeRecipient.titleEn}</span>
+              <span className="text-[10px] font-mono text-cyan-300 px-1.5 py-0.5 rounded bg-white/10">
+                ({isAr ? activeRecipient.roleLabelAr : activeRecipient.roleLabelEn})
               </span>
             </span>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-slate-400">{isAr ? 'القناة المفتوحة مع:' : 'Direct Channel With:'}</span>
-            <span className="font-extrabold text-cyan-200">
-              {currentRole === 'Monitor'
-                ? `${isAr ? activeAstronaut.fullNameAr : activeAstronaut.fullName} (${activeAstronaut.astronautCode})`
-                : isAr
-                ? 'د. كيسي ريفيرا (طبيب الرحلة)'
-                : 'Dr. Casey Rivera (Flight Surgeon)'}
-            </span>
             <span className="text-[10px] px-2 py-0.5 rounded bg-white/10 text-slate-300">
-              {chatMessages.length} {isAr ? 'رسالة' : 'msgs'}
+              {chatMessages.length} {isAr ? 'رسالة في هذا السجل' : 'msgs in thread'}
             </span>
           </div>
         </div>
@@ -205,16 +389,8 @@ export const GroundOrbitChatPage: React.FC = () => {
             </p>
             <p className="text-xs text-slate-400 mt-1 max-w-sm">
               {isAr
-                ? `هذه القناة مخصصة للمحادثة الطبية المعزولة مع ${
-                    currentRole === 'Monitor'
-                      ? isAr
-                        ? activeAstronaut.fullNameAr
-                        : activeAstronaut.fullName
-                      : isAr
-                      ? 'طبيب الرحلة د. كيسي ريفيرا'
-                      : 'Flight Surgeon Dr. Casey Rivera'
-                  }. اكتب رسالتك بالأسفل لبدء المحادثة.`
-                : 'Send your first clinical message below to start direct medical consultation.'}
+                ? `هذه القناة مخصصة للمحادثة مع ${isAr ? activeRecipient.titleAr : activeRecipient.titleEn}. اكتب رسالتك بالأسفل للإرسال.`
+                : `This channel routes directly to ${activeRecipient.titleEn}. Type your transmission below to begin.`}
             </p>
           </div>
         ) : (
@@ -229,9 +405,9 @@ export const GroundOrbitChatPage: React.FC = () => {
                   isMine ? 'self-end items-end' : 'self-start items-start'
                 }`}
               >
-                {/* Sender Name & Timestamp */}
-                <div className="flex items-center gap-2 mb-1 px-1">
-                  <span className="text-[11px] font-bold text-slate-300">
+                {/* Sender Name, Recipient & Timestamp */}
+                <div className="flex items-center gap-2 mb-1 px-1 flex-wrap">
+                  <span className="text-[11px] font-bold text-slate-200">
                     {isMine
                       ? isAr
                         ? `أنت (${currentUserName})`
@@ -245,6 +421,13 @@ export const GroundOrbitChatPage: React.FC = () => {
                           ? activeAstronaut.fullNameAr
                           : activeAstronaut.fullName)}
                   </span>
+
+                  {msg.recipientName && (
+                    <span className="text-[10px] text-cyan-300 bg-cyan-950/60 border border-cyan-400/30 px-1.5 py-0.2 rounded">
+                      {isAr ? `إلى: ${msg.recipientName}` : `To: ${msg.recipientName}`}
+                    </span>
+                  )}
+
                   <span className="text-[10px] text-slate-400 flex items-center gap-1 font-mono">
                     <Clock className="w-2.5 h-2.5 text-slate-400" />
                     {new Date(msg.sentAt).toLocaleTimeString(isAr ? 'ar-EG' : 'en-US', {
@@ -279,7 +462,7 @@ export const GroundOrbitChatPage: React.FC = () => {
                       </>
                     ) : (
                       <>
-                        <Check className="w-3 h-3 text-cyan-400" />
+                        <Check className="w-3.5 h-3.5 text-cyan-400" />
                         <span>{isAr ? 'تم التسليم' : 'Delivered'}</span>
                       </>
                     )}
@@ -292,7 +475,7 @@ export const GroundOrbitChatPage: React.FC = () => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Quick Clinical Replies */}
+      {/* Quick Suggested Replies */}
       <div className="space-y-1.5 pt-2 border-t border-white/10">
         <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400">
           <Sparkles className="w-3 h-3 text-cyan-400" />
@@ -312,27 +495,33 @@ export const GroundOrbitChatPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Compose & Transmit Form */}
-      <form onSubmit={handleSend} className="flex items-center gap-2.5 pt-1">
+      {/* Compose & Transmit Form with Direct Recipient Chip */}
+      <form onSubmit={handleSend} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
+        {/* Recipient Indicator Tag */}
+        <div className="flex items-center gap-1.5 bg-slate-900/90 border border-cyan-400/40 px-3 py-2 rounded-xl text-xs font-bold text-cyan-200 shrink-0">
+          <Send className="w-3.5 h-3.5 text-cyan-400 rotate-45" />
+          <span className="text-slate-400">{isAr ? 'إلى:' : 'To:'}</span>
+          <span className="text-white truncate max-w-[140px]">
+            {isAr ? activeRecipient.titleAr : activeRecipient.titleEn}
+          </span>
+        </div>
+
         <input
           type="text"
           value={messageText}
           onChange={(e) => setMessageText(e.target.value)}
           placeholder={
-            currentRole === 'Monitor'
-              ? isAr
-                ? `اكتب تعليماتك الطبية للرائد ${activeAstronaut.fullNameAr}...`
-                : `Send clinical directive to ${activeAstronaut.fullName}...`
-              : isAr
-              ? 'اكتب رسالتك أو استفسارك لطبيب الرحلة...'
-              : 'Transmit medical report / query to Flight Surgeon...'
+            isAr
+              ? `اكتب رسالتك الموجهة إلى ${activeRecipient.titleAr}...`
+              : `Transmit message to ${activeRecipient.titleEn}...`
           }
           className="flex-1 rounded-xl bg-slate-900/80 border border-white/15 px-4 py-2.5 text-sm text-white placeholder-slate-400 focus:outline-none focus:border-cyan-400"
         />
+
         <button
           type="submit"
           disabled={!messageText.trim() || sending}
-          className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white font-bold text-sm flex items-center gap-2 shadow-lg transition-all disabled:opacity-50 cursor-pointer"
+          className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition-all disabled:opacity-50 cursor-pointer"
         >
           <Send className="w-4 h-4" />
           <span>{isAr ? 'إرسال' : 'Send'}</span>

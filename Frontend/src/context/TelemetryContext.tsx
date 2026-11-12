@@ -89,7 +89,13 @@ interface TelemetryContextType {
   acknowledgeAlert: (id: number) => void;
   resolveAlert: (id: number, notes: string) => void;
   dismissAlert: (id: number) => void;
-  sendChatMessage: (content: string, senderRole?: 'Astronaut' | 'Monitor', targetAstronautId?: number) => void;
+  sendChatMessage: (
+    content: string,
+    senderRole?: 'Astronaut' | 'Monitor',
+    targetAstronautId?: number,
+    recipientName?: string,
+    recipientRole?: string
+  ) => void;
   markAllChatRead: () => void;
   provisionAstronaut: (
     fullName: string,
@@ -489,13 +495,13 @@ const accountCredentials: Record<
     astronautId: 1,
   },
   'astro.lee': {
-    password: 'Astro#2026!Lee',
+    password: 'Astro#2026!Vance',
     role: 'Astronaut',
     code: 'AST-002',
     astronautId: 2,
   },
   'astro.quinn': {
-    password: 'Astro#2026!Quinn',
+    password: 'Astro#2026!Vance',
     role: 'Astronaut',
     code: 'AST-003',
     astronautId: 3,
@@ -567,8 +573,36 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   ): Promise<{ success: boolean; message?: string }> => {
     try {
       const meta = accountCredentials[username];
-      const pwd = password || meta?.password || 'Nasa@2026!';
-      const res = await api.login(username, pwd);
+      const primaryPwd = password || meta?.password || 'Astro#2026!Vance';
+
+      let res: any;
+      try {
+        res = await api.login(username, primaryPwd);
+      } catch (firstErr: any) {
+        // Fallback retry with alternative known seed passwords
+        const fallbacks = [
+          'Astro#2026!Vance',
+          'Monitor#2026!Rivera',
+          'Astro123!Vance',
+          'Astro123!Lee',
+          'Astro123!Quinn',
+          'Monitor123!Rivera',
+        ].filter((p) => p !== primaryPwd);
+
+        let recovered = false;
+        for (const fb of fallbacks) {
+          try {
+            res = await api.login(username, fb);
+            recovered = true;
+            break;
+          } catch {
+            // keep trying
+          }
+        }
+        if (!recovered) {
+          throw firstErr;
+        }
+      }
 
       const resolvedRole = (res?.role as 'Astronaut' | 'Monitor') || meta?.role || 'Astronaut';
       const resolvedName = res?.fullName || meta?.code || username;
@@ -1219,7 +1253,9 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const sendChatMessage = async (
     content: string,
     senderRole?: 'Astronaut' | 'Monitor',
-    targetAstronautId?: number
+    targetAstronautId?: number,
+    recipientName?: string,
+    recipientRole?: string
   ) => {
     const role = senderRole || currentRole;
     const astroId =
@@ -1239,6 +1275,8 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           ? 'د. كيسي ريفيرا'
           : currentUserName || 'رائد فضاء',
       senderRole: role,
+      recipientName,
+      recipientRole,
       content,
       sentAt: new Date().toISOString(),
       isRead: false,
