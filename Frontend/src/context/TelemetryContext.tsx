@@ -83,6 +83,9 @@ interface TelemetryContextType {
   createRecommendation: (
     payload: Omit<Recommendation, 'id' | 'generatedAt' | 'status'>
   ) => void;
+  deleteRecommendation: (id: number) => void;
+  triggerRecommendationAlert: (recId: number) => void;
+  acknowledgeAllAlerts: () => void;
   triggerManualAlert: (
     title: string,
     message: string,
@@ -359,29 +362,70 @@ const initialRecommendations: Recommendation[] = [
     astronautFullName: 'Morgan Vance',
     generatedAt: '2026-11-11T08:00:00Z',
     title: 'ARED High-Resistance Countermeasure Protocol (45 min)',
-    titleAr: 'جلسة تمارين المقاومة للحفاظ على الكتلة العضلية (45 دقيقة)',
+    titleAr: 'جلسة تمارين المقاومة العالية ARED لمقاومة ضمور العضلات (45 دقيقة)',
     content: 'Complete 4 sets of squats and deadlifts on ARED with isotonic hydration.',
-    contentAr: 'إتمام 4 مجموعات من تمارين المقاومة مع تعويض السوائل.',
+    contentAr: 'إتمام 4 مجموعات من تمارين القرفصاء والرفعة الميتة على جهاز ARED مع تعويض السوائل والشوارد.',
     reason: 'Mitigate bone mineral density loss and cephalad fluid shift in microgravity.',
-    reasonAr: 'للحد من فقدان كثافة العظام وتوزيع السوائل في انعدام الجاذبية.',
+    reasonAr: 'الحد من ارتشاف الكالسيوم العظمي وتراجع الكتلة العضلية وانزياح السوائل الرأسي في الجاذبية الصغرى.',
     category: 'Physical',
     priority: 'High',
     status: 'Pending',
+    scheduleType: 'DailyRecurring',
+    scheduledTime: '13:00',
+    prescribedBy: 'د. سارة أوكونور (طبيب الرحلة الرئيسي)',
   },
   {
     id: 2,
     astronautId: 1,
     astronautFullName: 'Morgan Vance',
     generatedAt: '2026-11-10T20:00:00Z',
-    title: 'Blue-Enriched LED Circadian Shift',
-    titleAr: 'تهدئة الإضاءة قبل موعد النوم بـ 90 دقيقة',
-    content: 'Switch habitat lighting to warm spectrum 90 minutes prior to sleep window.',
-    contentAr: 'تحويل إضاءة المقصورة إلى الطيف الدافئ قبل النوم لتحسين جودة النوم.',
-    reason: 'Preserve endogenous melatonin secretion against 16 orbital sunrises/day.',
-    reasonAr: 'للحفاظ على انتظام الساعة البيولوجية وإفراز الميلاتونين.',
+    title: 'Circadian Light Attenuation & Melatonin Support',
+    titleAr: 'تعديل الطيف الضوئي للمقصورة قبل موعد النوم بـ 90 دقيقة',
+    content: 'Switch habitat lighting to warm 2700K spectrum 90 minutes prior to sleep window.',
+    contentAr: 'تحويل إضاءة وحدة النوم إلى الطيف الدافئ 2700K وإيقاف الشاشات المحمولة لتحفيز إفراز الميلاتونين.',
+    reason: 'Preserve endogenous circadian rhythm against 16 orbital sunrises per 24 hours.',
+    reasonAr: 'تثبيت إيقاع الساعة البيولوجية الداخلية في مواجهة شروق الشمس المداري المتكرر كل 90 دقيقة.',
     category: 'Sleep',
     priority: 'Medium',
     status: 'Acknowledged',
+    scheduleType: 'DailyRecurring',
+    scheduledTime: '21:30',
+    prescribedBy: 'د. سارة أوكونور (طبيب الرحلة الرئيسي)',
+  },
+  {
+    id: 3,
+    astronautId: 1,
+    astronautFullName: 'Morgan Vance',
+    generatedAt: '2026-11-12T06:30:00Z',
+    title: 'Orbital Hydration & Electrolyte Oral Protocol',
+    titleAr: 'بروتوكول الإماهة الصباحية وتوازن الكهارل والأملاح',
+    content: 'Administer 500ml balanced electrolyte solution upon waking up.',
+    contentAr: 'تناول 500 مل من محلول الأملاح التعويضي المتوازن فور الاستيقاظ لضبط حجم البلازما الدموية.',
+    reason: 'Counteract microgravity hypovolemia and orthostatic intolerance.',
+    reasonAr: 'معادلة انخفاض حجم الدم الوريدي وحماية الدورة الدموية من هبوط الضغط الانتصابي.',
+    category: 'Medical',
+    priority: 'High',
+    status: 'Pending',
+    scheduleType: 'DailyRecurring',
+    scheduledTime: '07:30',
+    prescribedBy: 'د. إيلينا روستوفا (أخصائية وظائف الأعضاء المدارية)',
+  },
+  {
+    id: 4,
+    astronautId: 1,
+    astronautFullName: 'Morgan Vance',
+    generatedAt: '2026-11-12T09:00:00Z',
+    title: 'Post-EVA Vestibular Calibration & Otolith Rest',
+    titleAr: 'إجراءات استقرار الجهاز الدهليزي بعد عمليات السير الفضائي',
+    content: 'Perform 15-minute guided visual-vestibular fixation protocol in calm station environment.',
+    contentAr: 'تطبيق تمرين التثبيت البصري الدهليزي لمدة 15 دقيقة في بيئة هادئة لتسريع التكيف الحركي.',
+    reason: 'Rapid re-adaptation of otolith organs following microgravity spatial disorientation.',
+    reasonAr: 'إعادة ضبط المستقبلات الحسية في الأذن الداخلية وتفادي أعراض دوار الحركة الفضائي.',
+    category: 'Medical',
+    priority: 'Medium',
+    status: 'Completed',
+    scheduleType: 'Once',
+    prescribedBy: 'د. سارة أوكونور (طبيب الرحلة الرئيسي)',
   },
 ];
 
@@ -834,8 +878,16 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [alerts, setAlerts] = useState<HealthAlert[]>([]);
   const [sleepRecords, setSleepRecords] = useState<SleepRecord[]>(initialSleepRecords);
   const [moodEntries, setMoodEntries] = useState<MoodEntry[]>(initialMoodEntries);
-  const [recommendations, setRecommendations] =
-    useState<Recommendation[]>(initialRecommendations);
+  const [recommendations, setRecommendations] = useState<Recommendation[]>(() => {
+    try {
+      const saved = localStorage.getItem('nasa_custom_recommendations');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return initialRecommendations;
+  });
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(initialChatMessages);
   const [selectedChatAstronautId, setSelectedChatAstronautId] = useState<number>(1);
   const [crewMembers, setCrewMembers] = useState<CrewMemberStatus[]>(initialCrewMembers);
@@ -1000,6 +1052,9 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           : 'Low',
       generatedAt: new Date().toISOString(),
       status: 'Pending',
+      scheduleType: sc.severity === 'Routine' ? 'DailyRecurring' : 'Once',
+      scheduledTime: '13:00',
+      prescribedBy: 'د. سارة أوكونور (طبيب الرحلة الرئيسي)',
     };
     setRecommendations((prev) => [customRec, ...prev.filter((r) => r.titleAr !== customRec.titleAr)]);
 
@@ -1455,22 +1510,8 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     };
   }, [selectedChatAstronautId, activeAccount, currentRole, isAuthenticated, currentAstronautId]);
 
-  const overallStatus: VitalSignStatus = (() => {
-    const list = Object.values(vitals);
-    if (
-      list.some((v) => v.status === 'Emergency') ||
-      alerts.some((a) => a.severity === 'Emergency' && a.status !== 'Resolved')
-    ) {
-      return 'Emergency';
-    }
-    if (
-      list.some((v) => v.status === 'MedicalAttention') ||
-      alerts.some((a) => a.severity === 'MedicalAttention' && a.status !== 'Resolved')
-    ) {
-      return 'MedicalAttention';
-    }
-    return 'Routine';
-  })();
+  // Strict, non-random binding of astronaut overall status to active clinical scenario
+  const overallStatus: VitalSignStatus = activeScenario?.severity || 'Routine';
 
   const evaluateReading = (
     code: VitalCode,
@@ -1680,10 +1721,32 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   };
 
+  const playAlertTone = (isUrgent: boolean = false) => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = isUrgent ? 'sawtooth' : 'sine';
+      osc.frequency.setValueAtTime(isUrgent ? 880 : 587.33, ctx.currentTime);
+      gain.gain.setValueAtTime(0.09, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.35);
+    } catch {}
+  };
+
   const updateRecommendationStatus = (id: number, newStatus: RecommendationStatus) => {
-    setRecommendations((prev) =>
-      prev.map((rec) => (rec.id === id ? { ...rec, status: newStatus } : rec))
-    );
+    setRecommendations((prev) => {
+      const updated = prev.map((rec) => (rec.id === id ? { ...rec, status: newStatus } : rec));
+      try {
+        localStorage.setItem('nasa_custom_recommendations', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
     api.updateRecommendationStatus(id, newStatus).catch(() => {});
   };
 
@@ -1695,8 +1758,17 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       id: Date.now(),
       generatedAt: new Date().toISOString(),
       status: 'Pending',
+      scheduleType: payload.scheduleType || 'DailyRecurring',
+      scheduledTime: payload.scheduledTime || '08:00',
+      prescribedBy: payload.prescribedBy || 'د. سارة أوكونور (طبيب الرحلة الرئيسي)',
     };
-    setRecommendations((prev) => [newRec, ...prev]);
+    setRecommendations((prev) => {
+      const updated = [newRec, ...prev];
+      try {
+        localStorage.setItem('nasa_custom_recommendations', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
     api
       .createRecommendation({
         astronautId: payload.astronautId || 1,
@@ -1708,6 +1780,91 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       })
       .catch(() => {});
   };
+
+  const deleteRecommendation = (id: number) => {
+    setRecommendations((prev) => {
+      const updated = prev.filter((r) => r.id !== id);
+      try {
+        localStorage.setItem('nasa_custom_recommendations', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  const triggerRecommendationAlert = (recId: number) => {
+    const rec = recommendations.find((r) => r.id === recId);
+    if (!rec) return;
+    const testAlert: HealthAlert = {
+      id: Date.now(),
+      astronautId: rec.astronautId || currentAstronautId || 1,
+      astronautName: rec.astronautFullName || currentUserName || 'Morgan Vance',
+      title: `⏰ تذكير بموعد التوصية: ${rec.titleAr || rec.title}`,
+      message: `حان موعد تنفيذ التوصية المجدولة [${rec.scheduledTime || 'المقررة'}]: ${rec.contentAr || rec.content}. التوجيه من: ${rec.prescribedBy || 'طبيب الرحلة'}`,
+      severity: rec.priority === 'Urgent' ? 'Emergency' : 'MedicalAttention',
+      status: 'Active',
+      vitalSignTypeCode: 'HR',
+      triggeredAt: new Date().toISOString(),
+    };
+    setAlerts((prev) => [testAlert, ...prev]);
+    playAlertTone(rec.priority === 'Urgent');
+  };
+
+  const acknowledgeAllAlerts = () => {
+    setAlerts((prev) =>
+      prev.map((a) =>
+        a.status === 'Active'
+          ? {
+              ...a,
+              status: 'Acknowledged',
+              acknowledgedAt: new Date().toISOString(),
+              acknowledgedBy: currentUserName || 'Crew / Surgeon',
+            }
+          : a
+      )
+    );
+  };
+
+  // Automated Daily Recurring Recommendation Alert Engine
+  useEffect(() => {
+    const checkScheduledRecs = () => {
+      const now = new Date();
+      const currentHours = String(now.getHours()).padStart(2, '0');
+      const currentMinutes = String(now.getMinutes()).padStart(2, '0');
+      const currentTimeStr = `${currentHours}:${currentMinutes}`;
+      const todayDateStr = now.toISOString().slice(0, 10);
+
+      recommendations.forEach((rec) => {
+        if (
+          rec.scheduleType === 'DailyRecurring' &&
+          rec.scheduledTime &&
+          rec.status !== 'Completed'
+        ) {
+          const slotKey = `notified_rec_${rec.id}_${todayDateStr}_${rec.scheduledTime}`;
+          if (!sessionStorage.getItem(slotKey)) {
+            if (currentTimeStr === rec.scheduledTime) {
+              sessionStorage.setItem(slotKey, 'true');
+              const reminderAlert: HealthAlert = {
+                id: Date.now(),
+                astronautId: rec.astronautId || currentAstronautId || 1,
+                astronautName: rec.astronautFullName || currentUserName || 'Morgan Vance',
+                title: `⏰ موعد التوصية اليومية: ${rec.titleAr || rec.title}`,
+                message: `حان الآن موعد تطبيق التوصية المجدولة [${rec.scheduledTime}]: ${rec.contentAr || rec.content}. بإشراف: ${rec.prescribedBy || 'طبيب الرحلة'}`,
+                severity: rec.priority === 'Urgent' ? 'Emergency' : 'MedicalAttention',
+                status: 'Active',
+                vitalSignTypeCode: 'HR',
+                triggeredAt: new Date().toISOString(),
+              };
+              setAlerts((prev) => [reminderAlert, ...prev]);
+              playAlertTone(rec.priority === 'Urgent');
+            }
+          }
+        }
+      });
+    };
+
+    const interval = setInterval(checkScheduledRecs, 12000);
+    return () => clearInterval(interval);
+  }, [recommendations, currentAstronautId, currentUserName]);
 
   const triggerManualAlert = (
     title: string,
@@ -2131,6 +2288,9 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         recordMood,
         updateRecommendationStatus,
         createRecommendation,
+        deleteRecommendation,
+        triggerRecommendationAlert,
+        acknowledgeAllAlerts,
         triggerManualAlert,
         acknowledgeAlert,
         resolveAlert,

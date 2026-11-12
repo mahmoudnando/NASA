@@ -23,17 +23,38 @@ export const StatusBanner: React.FC = () => {
     ? 'bg-amber-500/20 text-amber-300 border-amber-400/50 shadow-[0_0_24px_rgba(245,158,11,0.35)]'
     : 'bg-emerald-500/20 text-emerald-300 border-emerald-400/50 shadow-[0_0_24px_rgba(16,185,129,0.35)]';
 
-  const statusText = isEmergency
-    ? t.statusBanner.emergency
-    : isAttention
-    ? t.statusBanner.attention
-    : t.statusBanner.stable;
+  const statusText = (() => {
+    if (activeScenario.id === 'nominal') {
+      return isAr ? 'مستقرة وطبيعية تماماً' : 'Nominal & Fully Stable';
+    }
+    if (activeScenario.id === 'eva_sortie') {
+      return isAr ? 'مجهود بدني عالي (سير فضائي EVA)' : 'High Physical Exertion (EVA Sortie)';
+    }
+    if (activeScenario.id === 'hypoxia') {
+      return isAr ? 'طوارئ حرجة: نقص أكسجة حاد' : 'Critical Emergency: Acute Hypoxia';
+    }
+    if (activeScenario.id === 'sas_sickness') {
+      return isAr ? 'تحت الملاحظة: دوار التكيف الفضائي' : 'Medical Attention: Space Motion Sickness';
+    }
+    if (activeScenario.id === 'countermeasure_exercise') {
+      return isAr ? 'تمارين مقاومة نشطة (ARED)' : 'Active Countermeasure Exercise';
+    }
+    if (activeScenario.id === 'deep_sleep') {
+      return isAr ? 'دورة نوم عميق واستشفاء' : 'Deep Sleep & Circadian Recovery';
+    }
+    return isEmergency
+      ? t.statusBanner.emergency
+      : isAttention
+      ? t.statusBanner.attention
+      : t.statusBanner.stable;
+  })();
 
-  const statusSubtext = isEmergency
-    ? t.statusBanner.emergencySubtext
-    : isAttention
-    ? t.statusBanner.attentionSubtext
-    : t.statusBanner.stableSubtext;
+  const statusSubtext = (() => {
+    if (isAr) {
+      return `${activeScenario.diagnosisAr}. ${activeScenario.flightSurgeonDirectiveAr}`;
+    }
+    return `${activeScenario.diagnosisEn}. ${activeScenario.flightSurgeonDirectiveEn}`;
+  })();
 
   const textColor = isEmergency
     ? 'text-red-400 drop-shadow-[0_0_14px_rgba(239,68,68,0.5)]'

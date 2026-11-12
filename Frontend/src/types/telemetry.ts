@@ -155,6 +155,8 @@ export interface MoodEntry {
   notes?: string;
 }
 
+export type ScheduleType = 'Once' | 'DailyRecurring';
+
 export interface Recommendation {
   id: number;
   astronautId: number;
@@ -169,6 +171,9 @@ export interface Recommendation {
   category: RecommendationCategory;
   priority: RecommendationPriority;
   status: RecommendationStatus;
+  scheduleType?: ScheduleType;
+  scheduledTime?: string;
+  prescribedBy?: string;
   actionDueDate?: string;
 }
 
