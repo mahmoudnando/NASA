@@ -15,6 +15,8 @@ import {
   MissionInfo,
   OfflineSyncItem,
   CreateVitalReadingPayload,
+  ClinicalScenario,
+  ScenarioId,
 } from '../types/telemetry';
 import { signalRService } from '../services/signalrService';
 import { api } from '../services/api';
@@ -133,6 +135,12 @@ interface TelemetryContextType {
   unassignCrewFromMission: (missionId: number, astronautId: number) => Promise<void>;
   executeOfflineSyncBatch: () => Promise<{ synced: number; duplicates: number }>;
   toggleOnlineStatus: () => void;
+  activeScenario: ClinicalScenario;
+  allScenarios: ClinicalScenario[];
+  activateScenario: (scenarioId: ScenarioId) => void;
+  isLivePulsing: boolean;
+  toggleLivePulsing: () => void;
+  lastTelemetryBeatAt: string;
 }
 
 const initialVitals: Record<VitalCode, VitalSignCardData> = {
@@ -514,6 +522,309 @@ const accountCredentials: Record<
   },
 };
 
+export const CLINICAL_SCENARIOS: ClinicalScenario[] = [
+  {
+    id: 'nominal',
+    titleAr: 'الحالة المستقرة النموذجية',
+    titleEn: 'Nominal Baseline State',
+    subtitleAr: 'مؤشرات فسيولوجية مثالية مستقرة داخل المقصورة',
+    subtitleEn: 'Optimal resting biometrics within pressurized habitat',
+    descriptionAr:
+      'جميع العلامات الحيوية ضمن النطاقات الخضراء لرواد الفضاء، استقرار تام في التوازن الأكسجيني والدورة الدموية.',
+    descriptionEn:
+      'All vitals within green nominal aerospace ranges, full hemodynamic and metabolic stability.',
+    category: 'Routine',
+    severity: 'Routine',
+    targetVitals: {
+      hr: 72,
+      spo2: 98,
+      bpSystolic: 118,
+      bpDiastolic: 76,
+      temp: 36.6,
+      resp: 15,
+      glucose: 88,
+    },
+    symptomsAr: ['لا توجد أعراض مرضية', 'حالة يقظة وتركيز ذهني ممتازة', 'استقرار حركي وتكيف حسي متكامل'],
+    symptomsEn: ['No pathological symptoms', 'Sharp cognitive readiness', 'Full vestibular adaptation'],
+    diagnosisAr: 'استقرار فسيولوجي نموذجي — جاهزية تامة لتنفيذ المهام المدارية (Flight Ready Nominal)',
+    diagnosisEn: 'Nominal Physiological Equilibrium — Full Mission Task Readiness',
+    clinicalActionsAr: [
+      'مواصلة الجدول الروتيني للمهمة',
+      'تسجيل القياسات الدورية كالمعتاد',
+      'الحفاظ على الإماهة الطبيعية 2.5 لتر/يوم',
+    ],
+    clinicalActionsEn: [
+      'Continue nominal timeline',
+      'Periodic routine telemetry logging',
+      'Standard 2.5L daily hydration',
+    ],
+    flightSurgeonDirectiveAr: 'طبيب الرحلة: المؤشرات في أفضل مستوياتها، استمر في جدول العمل اليومي المعتمد.',
+    flightSurgeonDirectiveEn: 'Flight Surgeon: Biometrics optimal. Cleared for all scheduled operations.',
+  },
+  {
+    id: 'eva_sortie',
+    titleAr: 'نشاط خارج المركبة (EVA Spacewalk)',
+    titleEn: 'Extravehicular Activity (EVA Sortie)',
+    subtitleAr: 'جهد بدني واستقلابي فائق داخل بذلة الفضاء EMU',
+    subtitleEn: 'Intense metabolic workload inside Extravehicular Mobility Unit',
+    descriptionAr:
+      'ارتفاع كبير في معدل الأيض واستهلاك الأكسجين نتيجة مقاومة ضغط البذلة وانعدام الوزن أثناء العمل الخارجي.',
+    descriptionEn:
+      'Significant metabolic surge and oxygen consumption countering EMU suit pressure resistance during spacewalk.',
+    category: 'Exertion',
+    severity: 'MedicalAttention',
+    targetVitals: {
+      hr: 128,
+      spo2: 95,
+      bpSystolic: 136,
+      bpDiastolic: 88,
+      temp: 37.4,
+      resp: 22,
+      glucose: 94,
+    },
+    symptomsAr: [
+      'إجهاد عضلي في الساعدين والكتفين',
+      'ضيق تنفس جهدي متوسط',
+      'فرط تعرق واحترار داخل خوذة البذلة',
+      'جفاف الفم والحاجة للسوائل',
+    ],
+    symptomsEn: [
+      'Forearm & shoulder muscular strain',
+      'Moderate exertional dyspnea',
+      'Heavy perspiration & thermal load',
+      'Mild xerostomia (dry mouth)',
+    ],
+    diagnosisAr: 'إجهاد بدني واستقلابي ناتج عن نشاط السير الفضائي (High Metabolic EVA Exertion Strain)',
+    diagnosisEn: 'High Metabolic EVA Exertion Strain & Elevated Thermal Storage',
+    clinicalActionsAr: [
+      'رفع معدل تدفق سائل التبريد في البذلة (LCVG Coolant Flow Max)',
+      'التوقف عن الحركة لمدة 5 دقائق لخفض الحمل القلبي دون 100 bpm',
+      'تناول 400 مل من كيس الشرب المدمج داخل البذلة (In-suit Drink Bag)',
+      'فحص مستويات ثاني أكسيد الكربون (CO2 Scrubber Sensor)',
+    ],
+    clinicalActionsEn: [
+      'Maximize Liquid Cooling & Ventilation Garment (LCVG) flow',
+      '5-minute work halt to restore heart rate below 100 bpm',
+      'Hydrate via In-suit Drink Bag (400ml)',
+      'Verify CO2 scrubber canister levels',
+    ],
+    flightSurgeonDirectiveAr:
+      'طبيب الرحلة: نلاحظ ارتفاع معدل النبض إلى 128؛ خذ فترة راحة في مكانك لمدة 5 دقائق وارفع تبريد البذلة.',
+    flightSurgeonDirectiveEn:
+      'Flight Surgeon: Exertion index elevated at 128 bpm; pause translation and increase LCVG cooling.',
+  },
+  {
+    id: 'hypoxia',
+    titleAr: 'نقص الأكسجين وانخفاض ضغط الكابينة',
+    titleEn: 'Acute Hypoxia & Depressurization Hazard',
+    subtitleAr: 'هبوط حرج في الضغط الجزئي للأكسجين مع تسرع قلبي تعويضي',
+    subtitleEn: 'Critical drop in oxygen saturation with compensatory tachycardia',
+    descriptionAr:
+      'حالة طارئة خطيرة ناتجة عن تسريب ضغط هوائي أو خلل في أنظمة دعم الحياة ECLSS تؤدي لنقص أكسجة حرج.',
+    descriptionEn:
+      'Critical emergency caused by cabin depressurization or ECLSS failure, triggering severe hypoxemia.',
+    category: 'CriticalEmergency',
+    severity: 'Emergency',
+    targetVitals: {
+      hr: 116,
+      spo2: 87,
+      bpSystolic: 104,
+      bpDiastolic: 64,
+      temp: 36.4,
+      resp: 26,
+      glucose: 82,
+    },
+    symptomsAr: [
+      'دوار حاد وعدم اتزان',
+      'رؤية نفقية وتشوش بصري',
+      'بطء التفكير وصعوبة التركيز',
+      'زرقة طفيفة في أطراف الأصابع',
+    ],
+    symptomsEn: [
+      'Acute dizziness & vertigo',
+      'Tunnel vision & visual blur',
+      'Cognitive slowdown & impairment',
+      'Peripheral cyanosis on nail beds',
+    ],
+    diagnosisAr:
+      'نقص تأكسج دم حاد حرج ناتج عن نقص الأكسجين الجزئي (Acute Hypoxemia - Emergent Cabin Decompression)',
+    diagnosisEn:
+      'Acute Hypoxemia & Compensatory Tachycardia secondary to Cabin Depressurization',
+    clinicalActionsAr: [
+      'ارتداء قناع الأكسجين الطارئ فوراً بنسبة تدفق 100% O2',
+      'إحكام إغلاق خوذة ومفاصل بذلة الضغط والتحقق من صمام الأمان',
+      'إعلان حالة إنذار طوارئ حمراء لمركز التحكم وتفعيل بروتوكول العزل',
+      'الجلوس في مقعد التثبيت لمنع السقوط أو فقدان الوعي الفجائي',
+    ],
+    clinicalActionsEn: [
+      'Don emergency oxygen mask immediately with 100% O2 flow',
+      'Seal pressure suit helmet & lock visors',
+      'Broadcast Red Emergency Alert to Mission Control',
+      'Secure in crew couch to prevent impact from sudden syncope',
+    ],
+    flightSurgeonDirectiveAr:
+      'طبيب الرحلة — إنذار أحمر طارئ: تشبع الأكسجين 87%! ارتدِ قناع الأكسجين فوراً وتوقف عن أي نشاط!',
+    flightSurgeonDirectiveEn:
+      'Flight Surgeon — RED EMERGENCY ALERT: SpO2 at 87%! Don emergency O2 mask immediately!',
+  },
+  {
+    id: 'sas_sickness',
+    titleAr: 'متلازمة دوار الفضاء والتكيف الحسي (SAS)',
+    titleEn: 'Space Adaptation Syndrome (SAS)',
+    subtitleAr: 'اضطراب الدهليز العصبي وصعود سوائل الجسم للرأس',
+    subtitleEn: 'Neuro-vestibular conflict with cephalic fluid redistribution',
+    descriptionAr:
+      'رد فعل شائع خلال الأيام الأولى من دخول المدار ناجم عن تعارض إشارات الأذن الداخلية مع حاسة البصر.',
+    descriptionEn:
+      'Neuro-vestibular conflict where otolith organs fail to sense gravitational vectors, paired with fluid shifts.',
+    category: 'Adaptation',
+    severity: 'MedicalAttention',
+    targetVitals: {
+      hr: 84,
+      spo2: 98,
+      bpSystolic: 132,
+      bpDiastolic: 86,
+      temp: 36.8,
+      resp: 17,
+      glucose: 86,
+    },
+    symptomsAr: [
+      'غثيان متكرر وفقدان الشهية',
+      'صداع احتقاني وضغط في الجيوب الأنفية',
+      'دوار فوري عند تدوير الرأس بسرعة',
+      'خمول وحساسية للضوء',
+    ],
+    symptomsEn: [
+      'Recurrent nausea & anorexia',
+      'Congestive headache from cephalic fluid shift',
+      'Motion illusion on head roll/pitch',
+      'Lethargy & photophobia',
+    ],
+    diagnosisAr:
+      'متلازمة التكيف مع الجاذبية الصغرى الدرجة 2 (Space Adaptation Syndrome - Grade 2 Vestibular Malaise)',
+    diagnosisEn:
+      'Space Adaptation Syndrome (SAS) - Grade 2 Vestibular Malaise & Cephalic Fluid Shift',
+    clinicalActionsAr: [
+      'تثبيت الرأس وتجنب الحركات الزاوية السريعة (Pitch/Yaw avoidance)',
+      'تناول جرعة مضاد دوار (بروميثازين 25 ملغ حسب التوجيه الطبي)',
+      'ارتداء حزام الضغط البطني للحد من احتقان الرأس',
+      'شرب رشفات صغيرة متكررة من الماء مع أملاح الكهارل',
+    ],
+    clinicalActionsEn: [
+      'Stabilize head, minimize rapid pitch/yaw head movements',
+      'Administer Promethazine 25mg antiemetic countermeasure as directed',
+      'Adjust cabin foot restraints to anchor body position',
+      'Small sips of electrolyte fluid to prevent hypovolemic dehydration',
+    ],
+    flightSurgeonDirectiveAr:
+      'طبيب الرحلة: أعراض تكيف دهليزي معتادة في هذه المرحلة؛ ثبت رأسك وتناول جرعة التهدئة الدوائية المقررة.',
+    flightSurgeonDirectiveEn:
+      'Flight Surgeon: Classic neuro-vestibular adaptation. Restrict head rotations and take scheduled antiemetic.',
+  },
+  {
+    id: 'countermeasure_exercise',
+    titleAr: 'حصة تمارين وقائية مكثفة (T2 Treadmill)',
+    titleEn: 'Intense Countermeasure Exercise (T2/ARED)',
+    subtitleAr: 'بروتوكول حماية العضلات وكثافة العظام في الجاذبية الصغرى',
+    subtitleEn: 'Musculoskeletal & cardiovascular conditioning under bungee load',
+    descriptionAr:
+      'جلسة تدريب عالية الشدة باستخدام جهاز السير وأشرطة السحب لإنتاج جاذبية اصطناعية ومنع ضمور العظام.',
+    descriptionEn:
+      'High-intensity conditioning under bungee-harness tethering to preserve bone mineral density.',
+    category: 'Exertion',
+    severity: 'Routine',
+    targetVitals: {
+      hr: 148,
+      spo2: 97,
+      bpSystolic: 144,
+      bpDiastolic: 84,
+      temp: 37.3,
+      resp: 25,
+      glucose: 90,
+    },
+    symptomsAr: [
+      'تسارع نبض فسيولوجي صحي',
+      'تعرق غزير وإجهاد بدني نشط',
+      'احمرار الوجه مع تدفق الدم للعضلات',
+    ],
+    symptomsEn: [
+      'Healthy physiological tachycardia',
+      'Profuse perspiration & muscular exertion',
+      'Facial flushing with muscle perfusion',
+    ],
+    diagnosisAr:
+      'استجابة قلبية وعائية مثالية للتمارين الفضائية الوقائية (Nominal Peak Aerobic Countermeasure Response)',
+    diagnosisEn:
+      'Nominal Peak Aerobic Countermeasure Response — Cardiovascular Conditioning Target Reached',
+    clinicalActionsAr: [
+      'الحفاظ على وتيرة الجري لـ 30 دقيقة ضمن النطاق التدريبي المستهدف',
+      'مراقبة نبض القلب لضمان عدم تجاوزه الحد الأقصى الآمن (165 bpm)',
+      'التهدئة التدريجية (Cool-down) لمدة 5 دقائق قبل فك الأحزمة',
+      'شرب 750 مل من السوائل المعززة بالشوارد بعد انتهاء الجلسة',
+    ],
+    clinicalActionsEn: [
+      'Maintain running pace for 30 minutes in target aerobic zone',
+      'Monitor telemetry to ensure HR remains below 165 bpm ceiling',
+      '5-minute gradual cool-down prior to harness release',
+      'Consume 750ml electrolyte fluid post-session',
+    ],
+    flightSurgeonDirectiveAr:
+      'طبيب الرحلة: أداء ممتاز، معدل النبض 148 ضمن النطاق المستهدف لبناء القدرة القلبية. ابدأ التهدئة بعد 5 دقائق.',
+    flightSurgeonDirectiveEn:
+      'Flight Surgeon: Outstanding aerobic output; pulse at 148 is right in target zone. Begin cool-down in 5 mins.',
+  },
+  {
+    id: 'deep_sleep',
+    titleAr: 'الراحة العميقة والنوم الساكن (Deep Sleep)',
+    titleEn: 'Deep Slow-Wave Sleep & Circadian Recovery',
+    subtitleAr: 'هدوء باراسمبثاوي واستشفاء بيولوجي في كيس النوم المداري',
+    subtitleEn: 'Parasympathetic tone & circadian cellular restoration in sleep pod',
+    descriptionAr:
+      'مرحلة النوم العميق داخل كيس النوم المثبت، حيث تنخفض معدلات الأيض والنبض لإعادة بناء الأنسجة.',
+    descriptionEn:
+      'Deep slow-wave restorative sleep inside sleep cabin; basal metabolic rate with minimal workload.',
+    category: 'Recovery',
+    severity: 'Routine',
+    targetVitals: {
+      hr: 54,
+      spo2: 99,
+      bpSystolic: 106,
+      bpDiastolic: 68,
+      temp: 36.3,
+      resp: 11,
+      glucose: 78,
+    },
+    symptomsAr: [
+      'لا توجد أعراض — استرخاء عضلي وعصبي تام',
+      'تنفس بطيء ومنتظم',
+      'استجابة بيولوجية ترميمية ممتازة',
+    ],
+    symptomsEn: [
+      'No symptoms — full neuromusculoskeletal relaxation',
+      'Slow, rhythmic diaphragmatic breathing',
+      'Peak circadian cellular repair',
+    ],
+    diagnosisAr:
+      'استشفاء بيولوجي ونوم عميق نموذجي (Optimal Slow-Wave Parasympathetic Sleep)',
+    diagnosisEn:
+      'Optimal Restorative Slow-Wave Sleep & Parasympathetic Dominance',
+    clinicalActionsAr: [
+      'الحفاظ على تدفق هواء المقصورة الهادئ لمنع تجمع ثاني أكسيد الكربون حول الرأس',
+      'إبقاء سدادات الأذن وأقنعة العين لحجب الضوء وضوضاء مراوح المحطة',
+      'عدم مقاطعة دورة النوم إلا في حالات الإنذارات الحرجة للمحطة',
+    ],
+    clinicalActionsEn: [
+      'Ensure continuous cabin ventilation fan to prevent CO2 pocket formation',
+      'Maintain earplugs and sleep mask to mitigate ISS acoustic levels',
+      'Maintain silent telemetry monitoring without waking crew member',
+    ],
+    flightSurgeonDirectiveAr:
+      'طبيب الرحلة: مؤشرات الراحة مثالية ومعدل النبض 54 يدل على نوم عميق ومريح. مستمرون في المراقبة الصامتة.',
+    flightSurgeonDirectiveEn:
+      'Flight Surgeon: Biometrics nominal; 54 bpm indicates restorative deep sleep. Quiet monitoring active.',
+  },
+];
+
 const TelemetryContext = createContext<TelemetryContextType | undefined>(undefined);
 
 export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -538,6 +849,211 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [currentAstronautId, setCurrentAstronautId] = useState<number | null>(1);
   const [astronautProfile, setAstronautProfile] =
     useState<AstronautProfileData>(initialAstronautProfile);
+  const [activeScenario, setActiveScenario] = useState<ClinicalScenario>(CLINICAL_SCENARIOS[0]);
+  const [isLivePulsing, setIsLivePulsing] = useState<boolean>(true);
+  const [lastTelemetryBeatAt, setLastTelemetryBeatAt] = useState<string>(new Date().toISOString());
+
+  const toggleLivePulsing = () => {
+    setIsLivePulsing((prev) => !prev);
+  };
+
+  const activateScenario = (scenarioId: ScenarioId) => {
+    const sc = CLINICAL_SCENARIOS.find((s) => s.id === scenarioId) || CLINICAL_SCENARIOS[0];
+    setActiveScenario(sc);
+
+    // 1. Update Vitals state with targeted scenario physiological values
+    setVitals((prev) => ({
+      ...prev,
+      HR: {
+        ...prev.HR,
+        value: sc.targetVitals.hr.toString(),
+        status:
+          sc.targetVitals.hr > 120
+            ? 'MedicalAttention'
+            : sc.targetVitals.hr < 50
+            ? 'MedicalAttention'
+            : 'Routine',
+        progressPercent: Math.min(100, Math.round((sc.targetVitals.hr / 160) * 100)),
+      },
+      SPO2: {
+        ...prev.SPO2,
+        value: `${sc.targetVitals.spo2}%`,
+        status:
+          sc.targetVitals.spo2 < 90
+            ? 'Emergency'
+            : sc.targetVitals.spo2 < 95
+            ? 'MedicalAttention'
+            : 'Routine',
+        progressPercent: sc.targetVitals.spo2,
+      },
+      BP: {
+        ...prev.BP,
+        value: `${sc.targetVitals.bpSystolic}/${sc.targetVitals.bpDiastolic}`,
+        status:
+          sc.targetVitals.bpSystolic > 140 || sc.targetVitals.bpSystolic < 105
+            ? 'MedicalAttention'
+            : 'Routine',
+      },
+      TEMP: {
+        ...prev.TEMP,
+        value: `${sc.targetVitals.temp}°C`,
+        status: sc.targetVitals.temp > 37.5 ? 'MedicalAttention' : 'Routine',
+      },
+      RESP: {
+        ...prev.RESP,
+        value: sc.targetVitals.resp.toString(),
+        status:
+          sc.targetVitals.resp > 24
+            ? 'Emergency'
+            : sc.targetVitals.resp > 20
+            ? 'MedicalAttention'
+            : 'Routine',
+      },
+      GLUCOSE: {
+        ...prev.GLUCOSE,
+        value: sc.targetVitals.glucose.toString(),
+        status: 'Routine',
+      },
+    }));
+
+    // 2. Append point to Heart Rate History for live chart visualization
+    setHeartRateHistory((prev) => {
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const newPoint: HeartRateTimePoint = {
+        timeLabelAr: timeStr,
+        timeLabelEn: timeStr,
+        value: sc.targetVitals.hr,
+        recordedAt: now.toISOString(),
+      };
+      const updated = [...prev, newPoint];
+      return updated.slice(-10);
+    });
+
+    // 3. System Alert Integration (ترابط الجذور في كامل المنظومة)
+    if (sc.severity === 'Emergency') {
+      const emergencyAlert: HealthAlert = {
+        id: Date.now(),
+        astronautId: currentAstronautId || 1,
+        astronautName: currentUserName || 'Morgan Vance',
+        title: sc.titleAr,
+        message: `${sc.subtitleAr}. تشبع الأكسجين: ${sc.targetVitals.spo2}%، النبض: ${sc.targetVitals.hr} bpm. ${sc.flightSurgeonDirectiveAr}`,
+        severity: 'Emergency',
+        status: 'Active',
+        vitalSignTypeCode: 'SPO2',
+        triggeredAt: new Date().toISOString(),
+      };
+      setAlerts((prev) => [emergencyAlert, ...prev.filter((a) => a.title !== sc.titleAr)]);
+    } else if (sc.severity === 'MedicalAttention') {
+      const warnAlert: HealthAlert = {
+        id: Date.now(),
+        astronautId: currentAstronautId || 1,
+        astronautName: currentUserName || 'Morgan Vance',
+        title: sc.titleAr,
+        message: `${sc.subtitleAr}. النبض: ${sc.targetVitals.hr} bpm، الضغط: ${sc.targetVitals.bpSystolic}/${sc.targetVitals.bpDiastolic}.`,
+        severity: 'MedicalAttention',
+        status: 'Active',
+        vitalSignTypeCode: 'HR',
+        triggeredAt: new Date().toISOString(),
+      };
+      setAlerts((prev) => [warnAlert, ...prev.filter((a) => a.title !== sc.titleAr)]);
+    } else {
+      // Nominal or sleep resolves active emergency alarms
+      setAlerts((prev) =>
+        prev.map((a) =>
+          a.status === 'Active'
+            ? {
+                ...a,
+                status: 'Resolved',
+                resolvedAt: new Date().toISOString(),
+                resolutionNotes: 'عادت المؤشرات الحيوية للاستقرار الطبيعي بعد تفعيل السيناريو المستقر',
+              }
+            : a
+        )
+      );
+    }
+
+    // 4. Recommendation Integration (ترابط التوصيات السريرية)
+    const customRec: Recommendation = {
+      id: Date.now(),
+      astronautId: currentAstronautId || 1,
+      astronautFullName: currentUserName || 'Morgan Vance',
+      category:
+        sc.category === 'CriticalEmergency'
+          ? 'Medical'
+          : sc.category === 'Recovery'
+          ? 'Sleep'
+          : 'Physical',
+      title: sc.titleEn,
+      titleAr: `بروتوكول سريري: ${sc.titleAr}`,
+      content: sc.clinicalActionsEn[0] || sc.flightSurgeonDirectiveEn,
+      contentAr: `${sc.flightSurgeonDirectiveAr} الإجراء الميداني الفوري: ${sc.clinicalActionsAr
+        .slice(0, 2)
+        .join(' | ')}`,
+      reason: sc.diagnosisEn,
+      reasonAr: sc.diagnosisAr,
+      priority:
+        sc.severity === 'Emergency'
+          ? 'High'
+          : sc.severity === 'MedicalAttention'
+          ? 'Medium'
+          : 'Low',
+      generatedAt: new Date().toISOString(),
+      status: 'Pending',
+    };
+    setRecommendations((prev) => [customRec, ...prev.filter((r) => r.titleAr !== customRec.titleAr)]);
+
+    // 5. Update crew members for doctor / ground monitoring console
+    setCrewMembers((prev) =>
+      prev.map((c) =>
+        c.id === (currentAstronautId || 1)
+          ? {
+              ...c,
+              hr: sc.targetVitals.hr,
+              spo2: sc.targetVitals.spo2,
+              bp: `${sc.targetVitals.bpSystolic}/${sc.targetVitals.bpDiastolic}`,
+              temp: sc.targetVitals.temp,
+              overallStatus: sc.severity,
+              lastSyncAt: new Date().toISOString(),
+            }
+          : c
+      )
+    );
+  };
+
+  // Live continuous telemetry oscillation loop (حيوية ونبض التيليمتري الحقيقي)
+  useEffect(() => {
+    if (!isLivePulsing) return;
+
+    const timer = setInterval(() => {
+      setLastTelemetryBeatAt(new Date().toISOString());
+
+      // Realistic micro-fluctuation around target vitals
+      setVitals((prev) => {
+        const baseHr = activeScenario.targetVitals.hr;
+        const jitterHr = Math.floor(Math.random() * 3) - 1; // -1, 0, +1
+        const liveHr = Math.max(45, Math.min(180, baseHr + jitterHr));
+
+        const baseResp = activeScenario.targetVitals.resp;
+        const jitterResp = Math.random() > 0.6 ? (Math.random() > 0.5 ? 1 : -1) : 0;
+        const liveResp = Math.max(8, Math.min(35, baseResp + jitterResp));
+
+        return {
+          ...prev,
+          HR: {
+            ...prev.HR,
+            value: liveHr.toString(),
+          },
+          RESP: {
+            ...prev.RESP,
+            value: liveResp.toString(),
+          },
+        };
+      });
+    }, 2400);
+
+    return () => clearInterval(timer);
+  }, [isLivePulsing, activeScenario]);
 
   const setCurrentRole = (role: 'Astronaut' | 'Monitor') => {
     setCurrentRoleState(role);
@@ -1631,6 +2147,12 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         unassignCrewFromMission,
         executeOfflineSyncBatch,
         toggleOnlineStatus,
+        activeScenario,
+        allScenarios: CLINICAL_SCENARIOS,
+        activateScenario,
+        isLivePulsing,
+        toggleLivePulsing,
+        lastTelemetryBeatAt,
       }}
     >
       {children}

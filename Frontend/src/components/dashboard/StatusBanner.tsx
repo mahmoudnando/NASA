@@ -1,11 +1,12 @@
 import React from 'react';
-import { Check, AlertTriangle, AlertCircle } from 'lucide-react';
+import { Check, AlertTriangle, AlertCircle, Radio, Sparkles } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useTelemetry } from '../../context/TelemetryContext';
 
 export const StatusBanner: React.FC = () => {
-  const { t } = useLanguage();
-  const { overallStatus } = useTelemetry();
+  const { language, t } = useLanguage();
+  const { overallStatus, activeScenario, vitals, isLivePulsing } = useTelemetry();
+  const isAr = language === 'ar';
 
   const isAttention = overallStatus === 'MedicalAttention';
   const isEmergency = overallStatus === 'Emergency';
@@ -42,9 +43,13 @@ export const StatusBanner: React.FC = () => {
 
   const ecgStroke = isEmergency ? '#ef4444' : isAttention ? '#f59e0b' : '#10b981';
 
+  const currentHr = Number(vitals.HR.value) || 72;
+  // Dynamic ECG animation speed based on heart rate
+  const animDuration = Math.max(0.7, Math.min(3.0, (60 / currentHr) * 2.2));
+
   return (
     <div
-      className={`w-full rounded-3xl px-6 py-5 md:px-8 md:py-5 flex flex-col md:flex-row items-center justify-between gap-5 transition-all duration-500 ${glowClass} relative overflow-hidden`}
+      className={`w-full rounded-3xl px-6 py-5 md:px-8 md:py-5 flex flex-col md:flex-row items-center justify-between gap-5 transition-all duration-500 ${glowClass} relative overflow-hidden border border-white/10`}
     >
       {/* Status Info Group */}
       <div className="flex items-center gap-5 z-10 w-full md:w-auto">
@@ -61,11 +66,20 @@ export const StatusBanner: React.FC = () => {
           )}
         </div>
 
-        {/* Status Text */}
+        {/* Status Text & Scenario Tag */}
         <div className="flex flex-col">
-          <span className="text-xs md:text-sm font-bold text-slate-200">
-            {t.statusBanner.statusLabel}
-          </span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs md:text-sm font-bold text-slate-200">
+              {t.statusBanner.statusLabel}
+            </span>
+            {/* Active Scenario Tag */}
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-cyan-950/80 text-cyan-300 border border-cyan-400/40 shadow-sm">
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+              <span>{isAr ? 'السيناريو النشط:' : 'Active Scenario:'}</span>
+              <span className="text-white">{isAr ? activeScenario.titleAr : activeScenario.titleEn}</span>
+            </span>
+          </div>
+
           <div className={`text-2xl md:text-3xl font-extrabold leading-tight mt-0.5 ${textColor}`}>
             {statusText}
           </div>
@@ -75,8 +89,17 @@ export const StatusBanner: React.FC = () => {
         </div>
       </div>
 
-      {/* Animated ECG Waveform */}
-      <div className="w-full md:w-72 h-14 flex items-center justify-center md:justify-end z-10">
+      {/* Dynamic Animated ECG Waveform with Live Beat rate */}
+      <div className="w-full md:w-72 h-16 flex flex-col items-center md:items-end justify-center z-10">
+        <div className="flex items-center gap-2 mb-1 text-[11px] font-mono text-cyan-300">
+          <span className="flex items-center gap-1">
+            <Radio className="w-3 h-3 text-cyan-400 animate-pulse" />
+            <span>{isLivePulsing ? (isAr ? 'بث حي 1Hz' : 'Live 1Hz') : (isAr ? 'متوقف' : 'Paused')}</span>
+          </span>
+          <span className="text-slate-400">|</span>
+          <span className="font-bold text-white">{vitals.HR.value} bpm</span>
+        </div>
+
         <svg
           viewBox="0 0 300 70"
           className="w-full max-w-[270px] h-full overflow-visible drop-shadow-[0_0_10px_rgba(16,185,129,0.45)]"
@@ -88,7 +111,10 @@ export const StatusBanner: React.FC = () => {
             strokeWidth="3"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className="animate-ecg"
+            style={{
+              strokeDasharray: 600,
+              animation: `ecg-sweep ${animDuration}s linear infinite`,
+            }}
           />
         </svg>
       </div>

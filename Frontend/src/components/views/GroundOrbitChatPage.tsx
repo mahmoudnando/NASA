@@ -47,6 +47,7 @@ export const GroundOrbitChatPage: React.FC = () => {
     setSelectedChatAstronautId,
     crewMembers,
     isOnline,
+    activeScenario,
   } = useTelemetry();
   const isAr = language === 'ar';
 
@@ -225,33 +226,50 @@ export const GroundOrbitChatPage: React.FC = () => {
     }
   };
 
+  const scenarioQuickReply =
+    activeScenario.id !== 'nominal'
+      ? currentRole === 'Monitor'
+        ? isAr
+          ? `توجيه طبي عاجل بخصوص ${activeScenario.titleAr}: يرجى اتباع البروتوكول فوراً — ${activeScenario.flightSurgeonDirectiveAr}`
+          : `Urgent Medical Directive for ${activeScenario.titleEn}: ${activeScenario.flightSurgeonDirectiveEn}`
+        : isAr
+        ? `بلاغ طبي لطبيب الرحلة: أرصد أعراض (${activeScenario.symptomsAr.slice(0, 2).join('، ')}) مع مؤشرات حيوية: نبض ${activeScenario.targetVitals.hr} bpm وأكسجين ${activeScenario.targetVitals.spo2}%.`
+        : `Clinical Report: Experiencing (${activeScenario.symptomsEn.slice(0, 2).join(', ')}) with HR ${activeScenario.targetVitals.hr} bpm and SpO2 ${activeScenario.targetVitals.spo2}%.`
+      : null;
+
   const quickReplies =
     currentRole === 'Monitor'
-      ? isAr
-        ? [
-            'تم استلام المؤشرات الحيوية الصباحية وجميعها ضمن النطاق الآمن.',
-            'يرجى شرب 500 مل من محلول الإماهة وإعادة قياس ضغط الدم.',
-            'تم تحديث بروتوكول التمارين والنوم في صفحة التوصيات الطبية.',
-            'هل تشعر بأي دوار حركة أو أعراض تكيف مع الجاذبية الصغرى؟',
-          ]
-        : [
-            'Morning vitals confirmed — all biometrics within safe operational limits.',
-            'Please hydrate with 500ml electrolyte solution and re-test BP.',
-            'Updated countermeasure protocol published in Medical Recommendations.',
-            'Are you experiencing any motion sickness or microgravity adaptation?',
-          ]
-      : isAr
       ? [
-          'تم تسجيل المؤشرات الحيوية الصباحية بنجاح، أشعر باستقرار تام.',
-          'أنهيت حصة التمارين الرياضية على السير المتحرك ومعدل النبض طبيعي.',
-          'أشعر ببعض الإرهاق والصداع الخفيف بعد جولة العمل خارج المركبة.',
-          'يرجى مراجعة بيانات النوم الأخيرة وإرشادات جدول المهام.',
+          ...(scenarioQuickReply ? [scenarioQuickReply] : []),
+          ...(isAr
+            ? [
+                'تم استلام المؤشرات الحيوية الصباحية وجميعها ضمن النطاق الآمن.',
+                'يرجى شرب 500 مل من محلول الإماهة وإعادة قياس ضغط الدم.',
+                'تم تحديث بروتوكول التمارين والنوم في صفحة التوصيات الطبية.',
+                'هل تشعر بأي دوار حركة أو أعراض تكيف مع الجاذبية الصغرى؟',
+              ]
+            : [
+                'Morning vitals confirmed — all biometrics within safe operational limits.',
+                'Please hydrate with 500ml electrolyte solution and re-test BP.',
+                'Updated countermeasure protocol published in Medical Recommendations.',
+                'Are you experiencing any motion sickness or microgravity adaptation?',
+              ]),
         ]
       : [
-          'Morning vitals logged successfully, feeling fully stable.',
-          'Completed treadmill countermeasure session, pulse is nominal.',
-          'Experiencing mild fatigue and light headache post-EVA sortie.',
-          'Please review latest sleep architecture and shift directives.',
+          ...(scenarioQuickReply ? [scenarioQuickReply] : []),
+          ...(isAr
+            ? [
+                'تم تسجيل المؤشرات الحيوية الصباحية بنجاح، أشعر باستقرار تام.',
+                'أنهيت حصة التمارين الرياضية على السير المتحرك ومعدل النبض طبيعي.',
+                'أشعر ببعض الإرهاق والصداع الخفيف بعد جولة العمل خارج المركبة.',
+                'يرجى مراجعة بيانات النوم الأخيرة وإرشادات جدول المهام.',
+              ]
+            : [
+                'Morning vitals logged successfully, feeling fully stable.',
+                'Completed treadmill countermeasure session, pulse is nominal.',
+                'Experiencing mild fatigue and light headache post-EVA sortie.',
+                'Please review latest sleep architecture and shift directives.',
+              ]),
         ];
 
   const renderIcon = (type: RecipientOption['iconType']) => {

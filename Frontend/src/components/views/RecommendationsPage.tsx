@@ -22,6 +22,7 @@ export const RecommendationsPage: React.FC = () => {
     createRecommendation,
     crewMembers,
     currentRole,
+    activeScenario,
   } = useTelemetry();
   const isAr = language === 'ar';
 
@@ -197,6 +198,31 @@ export const RecommendationsPage: React.FC = () => {
             </button>
           </div>
         </form>
+      )}
+
+      {/* Live Scenario Countermeasure Direct Link */}
+      {activeScenario.id !== 'nominal' && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-cyan-950/70 via-slate-900/90 to-blue-950/70 border border-cyan-400/40 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 shadow-[0_0_20px_rgba(34,211,238,0.15)] animate-fade-in">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center text-cyan-300 shrink-0">
+              <Sparkles className="w-5 h-5 text-cyan-400 animate-pulse" />
+            </div>
+            <div>
+              <span className="text-xs font-bold text-cyan-300 block">
+                {isAr ? 'بروتوكول موجه مخصص للسيناريو الحالي:' : 'Live Scenario Countermeasure Protocol:'}{' '}
+                <span className="text-white font-extrabold">{isAr ? activeScenario.titleAr : activeScenario.titleEn}</span>
+              </span>
+              <p className="text-xs text-slate-200 mt-0.5">
+                {isAr ? activeScenario.flightSurgeonDirectiveAr : activeScenario.flightSurgeonDirectiveEn}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-bold px-3 py-1 rounded-xl bg-cyan-500/20 text-cyan-200 border border-cyan-400/30">
+              {isAr ? 'مُفعّل بالتيليمتري' : 'Telemetry Linked'}
+            </span>
+          </div>
+        </div>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">

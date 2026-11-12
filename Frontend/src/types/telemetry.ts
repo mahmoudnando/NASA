@@ -250,3 +250,40 @@ export interface CreateVitalReadingPayload {
   sensorLocation?: string;
   notes?: string;
 }
+
+export type ScenarioId =
+  | 'nominal'
+  | 'eva_sortie'
+  | 'hypoxia'
+  | 'sas_sickness'
+  | 'countermeasure_exercise'
+  | 'deep_sleep';
+
+export interface ClinicalScenario {
+  id: ScenarioId;
+  titleAr: string;
+  titleEn: string;
+  subtitleAr: string;
+  subtitleEn: string;
+  descriptionAr: string;
+  descriptionEn: string;
+  category: 'Routine' | 'Exertion' | 'CriticalEmergency' | 'Adaptation' | 'Recovery';
+  severity: 'Routine' | 'MedicalAttention' | 'Emergency';
+  targetVitals: {
+    hr: number;
+    spo2: number;
+    bpSystolic: number;
+    bpDiastolic: number;
+    temp: number;
+    resp: number;
+    glucose: number;
+  };
+  symptomsAr: string[];
+  symptomsEn: string[];
+  diagnosisAr: string;
+  diagnosisEn: string;
+  clinicalActionsAr: string[];
+  clinicalActionsEn: string[];
+  flightSurgeonDirectiveAr: string;
+  flightSurgeonDirectiveEn: string;
+}

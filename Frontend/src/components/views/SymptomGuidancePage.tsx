@@ -8,6 +8,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
+import { useTelemetry } from '../../context/TelemetryContext';
 import { api } from '../../services/api';
 
 interface SymptomItem {
@@ -202,6 +203,7 @@ const defaultConditions: ConditionGuideItem[] = [
 
 export const SymptomGuidancePage: React.FC = () => {
   const { language } = useLanguage();
+  const { activeScenario } = useTelemetry();
   const isAr = language === 'ar';
 
   const [symptoms, setSymptoms] = useState<SymptomItem[]>(defaultSymptoms);
@@ -345,6 +347,37 @@ export const SymptomGuidancePage: React.FC = () => {
     <div className="flex flex-col gap-3.5 animate-fade-in">
       {/* Top Card: Interactive 18-Symptom Assessment Engine (/api/symptoms & /api/symptoms/assess) */}
       <div className="glass-panel rounded-[22px] p-5">
+        {/* Active Scenario Live Interconnection Banner */}
+        {activeScenario.id !== 'nominal' && (
+          <div className="mb-4 p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-slate-900/90 to-cyan-500/10 border border-amber-400/40 text-xs text-amber-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 shadow-md animate-fade-in">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-300 shrink-0">
+                <AlertTriangle className="w-5 h-5 animate-pulse" />
+              </div>
+              <div>
+                <span className="font-extrabold text-white text-xs block">
+                  {isAr ? 'أعراض حية مقترنة بالسيناريو النشط:' : 'Active Scenario Associated Symptoms:'}{' '}
+                  <span className="text-cyan-300 font-bold">{isAr ? activeScenario.titleAr : activeScenario.titleEn}</span>
+                </span>
+                <span className="text-slate-300 text-[11px] block mt-0.5">
+                  {isAr ? activeScenario.diagnosisAr : activeScenario.diagnosisEn}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              {(isAr ? activeScenario.symptomsAr : activeScenario.symptomsEn).map((sym, i) => (
+                <span
+                  key={i}
+                  className="px-2.5 py-1 rounded-lg bg-black/50 border border-amber-400/30 text-[11px] font-semibold text-amber-200"
+                >
+                  • {sym}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-cyan-500/20 border border-cyan-400/30 flex items-center justify-center text-cyan-300">

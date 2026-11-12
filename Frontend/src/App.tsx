@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { StatusBanner } from './components/dashboard/StatusBanner';
+import { ClinicalScenariosConsole } from './components/dashboard/ClinicalScenariosConsole';
 import { VitalsGrid } from './components/dashboard/VitalsGrid';
 import { HeartRateChart } from './components/dashboard/HeartRateChart';
 import { QuickActions } from './components/dashboard/QuickActions';
@@ -103,6 +104,7 @@ export const App: React.FC = () => {
           {currentRole === 'Astronaut' && activePage === 'dashboard' && (
             <div className="w-full flex flex-col gap-4 md:gap-5 animate-in fade-in duration-300">
               <StatusBanner />
+              <ClinicalScenariosConsole onNavigate={setActivePage} />
               <VitalsGrid onNavigateToVitals={() => setActivePage('vitals')} />
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-5 items-stretch">
                 <div className="lg:col-span-8 flex flex-col">

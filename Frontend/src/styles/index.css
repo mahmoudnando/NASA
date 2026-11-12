@@ -211,6 +211,15 @@ body {
   }
 }
 
+@keyframes ecg-sweep {
+  0% {
+    stroke-dashoffset: 600;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
 .animate-ecg {
   stroke-dasharray: 600;
   animation: ecgDraw 3.5s linear infinite;

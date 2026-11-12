@@ -15,13 +15,16 @@ export const HeartRateChart: React.FC = () => {
   const padX = 40;
   const padY = 26;
 
-  const minY = 60;
-  const maxY = 90;
+  const values = heartRateHistory.map((h) => h.value);
+  const minVal = values.length > 0 ? Math.min(...values) : 60;
+  const maxVal = values.length > 0 ? Math.max(...values) : 90;
+  const minY = Math.max(30, Math.floor((minVal - 10) / 10) * 10);
+  const maxY = Math.min(190, Math.ceil((maxVal + 10) / 10) * 10);
 
   const points = heartRateHistory.map((item, index) => {
     const x = padX + (index * (width - 2 * padX)) / Math.max(heartRateHistory.length - 1, 1);
     const clampedVal = Math.max(minY, Math.min(maxY, item.value));
-    const y = height - padY - ((clampedVal - minY) / (maxY - minY)) * (height - 2 * padY);
+    const y = height - padY - ((clampedVal - minY) / Math.max(1, maxY - minY)) * (height - 2 * padY);
     return { x, y, ...item };
   });
 
@@ -45,6 +48,13 @@ export const HeartRateChart: React.FC = () => {
     return d;
   };
 
+  const gridLevels = [
+    maxY,
+    Math.round(minY + (maxY - minY) * 0.66),
+    Math.round(minY + (maxY - minY) * 0.33),
+    minY,
+  ];
+
   const linePath = generateSmoothPath(points);
   const areaPath =
     points.length > 0
@@ -54,15 +64,23 @@ export const HeartRateChart: React.FC = () => {
       : '';
 
   const activePoint = points[activePointIndex] || points[points.length - 1];
+  const latestVal = heartRateHistory[heartRateHistory.length - 1]?.value || 72;
 
   return (
     <div className="glass-panel rounded-3xl p-5 md:p-6 flex flex-col justify-between h-full transition-all duration-300 relative overflow-hidden">
       {/* Header */}
-      <div className="flex items-center gap-2.5 mb-2 z-10">
-        <Activity className="w-5 h-5 text-cyan-400" />
-        <h3 className="text-sm md:text-base font-bold text-white">
-          {t.chart.title}
-        </h3>
+      <div className="flex items-center justify-between gap-2.5 mb-2 z-10 flex-wrap">
+        <div className="flex items-center gap-2.5">
+          <Activity className="w-5 h-5 text-cyan-400" />
+          <h3 className="text-sm md:text-base font-bold text-white">
+            {t.chart.title}
+          </h3>
+        </div>
+        <div className="flex items-center gap-2 text-xs font-mono bg-cyan-950/70 border border-cyan-400/30 px-2.5 py-0.5 rounded-full text-cyan-200">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+          <span>{isAr ? 'النبض الحي:' : 'Live Heart Rate:'}</span>
+          <span className="font-extrabold text-white">{latestVal} bpm</span>
+        </div>
       </div>
 
       {/* SVG Chart Area */}
@@ -84,8 +102,8 @@ export const HeartRateChart: React.FC = () => {
           </defs>
 
           {/* Horizontal Grid Lines & Y-Axis Labels */}
-          {[90, 80, 70, 60].map((level) => {
-            const y = height - padY - ((level - minY) / (maxY - minY)) * (height - 2 * padY);
+          {gridLevels.map((level) => {
+            const y = height - padY - ((level - minY) / Math.max(1, maxY - minY)) * (height - 2 * padY);
             return (
               <g key={level} className="opacity-45">
                 <line
