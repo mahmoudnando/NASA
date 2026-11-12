@@ -338,20 +338,24 @@ class ApiService {
   }
 
   // 9. ChatController (/api/chat/*)
-  public async getChatMessages(astronautId?: number): Promise<any> {
-    const query = astronautId ? `?astronautId=${astronautId}` : '';
-    return this.request<any>(`/chat/messages${query}`);
+  public async getChatMessages(astronautId?: number, pageSize = 200): Promise<any> {
+    const params = new URLSearchParams({ pageNumber: '1', pageSize: String(pageSize) });
+    if (astronautId) params.set('astronautId', String(astronautId));
+    return this.request<any>(`/chat/messages?${params.toString()}`);
   }
 
-  public async sendChatMessage(content: string, astronautId?: number): Promise<ChatMessage> {
-    const nowIso = new Date().toISOString();
-    return this.request<ChatMessage>('/chat/messages', {
+  public async sendChatMessage(
+    content: string,
+    astronautId?: number,
+    clientGeneratedId?: string
+  ): Promise<any> {
+    return this.request<any>('/chat/messages', {
       method: 'POST',
       body: JSON.stringify({
-        clientGeneratedId: crypto.randomUUID(),
+        clientGeneratedId: clientGeneratedId || crypto.randomUUID(),
         astronautId,
         content,
-        recordedAt: nowIso,
+        recordedAt: new Date().toISOString(),
       }),
     });
   }

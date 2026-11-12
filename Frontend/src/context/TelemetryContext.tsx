@@ -53,13 +53,17 @@ interface TelemetryContextType {
   missions: MissionInfo[];
   offlineQueue: OfflineSyncItem[];
   isOnline: boolean;
+  isAuthenticated: boolean;
   currentRole: 'Astronaut' | 'Monitor';
   activeAccount: string;
   currentUserCode: string;
   currentUserName: string;
+  currentAstronautId: number | null;
   astronautProfile: AstronautProfileData;
   setCurrentRole: (role: 'Astronaut' | 'Monitor') => void;
-  switchAccount: (username: string) => void;
+  switchAccount: (username: string) => Promise<boolean>;
+  login: (username: string, password?: string) => Promise<{ success: boolean; message?: string }>;
+  logout: () => Promise<void>;
   recordVital: (payload: CreateVitalReadingPayload) => Promise<void>;
   recordSleep: (
     payload: Omit<
@@ -367,32 +371,7 @@ const initialRecommendations: Recommendation[] = [
   },
 ];
 
-const initialChatMessages: ChatMessage[] = [
-  {
-    id: 1,
-    clientGeneratedId: 'c301-0001',
-    astronautId: 1,
-    senderId: 'monitor-rivera',
-    senderName: 'د. كيسي ريفيرا',
-    senderRole: 'Monitor',
-    content: 'صباح الخير مورغان، وصلت قراءات المؤشرات الحيوية الصباحية وجميعها مستقرة تماماً (النبض 72 والأكسجين 98%).',
-    sentAt: '2026-11-11T08:15:00Z',
-    isRead: true,
-    readAt: '2026-11-11T08:16:00Z',
-  },
-  {
-    id: 2,
-    clientGeneratedId: 'c301-0002',
-    astronautId: 1,
-    senderId: 'astro-vance',
-    senderName: 'مورغان فانس',
-    senderRole: 'Astronaut',
-    content: 'أهلاً دكتور، النوم كان ممتازاً لمدة 7.75 ساعة وسأبدأ برنامج التمارين اليومي قريباً.',
-    sentAt: '2026-11-11T08:18:00Z',
-    isRead: true,
-    readAt: '2026-11-11T08:19:00Z',
-  },
-];
+const initialChatMessages: ChatMessage[] = [];
 
 const initialCrewMembers: CrewMemberStatus[] = [
   {
@@ -546,25 +525,80 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [missions, setMissions] = useState<MissionInfo[]>(initialMissions);
   const [offlineQueue, setOfflineQueue] = useState<OfflineSyncItem[]>(initialOfflineQueue);
   const [isOnline, setIsOnline] = useState<boolean>(true);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
   const [currentRole, setCurrentRoleState] = useState<'Astronaut' | 'Monitor'>('Astronaut');
   const [activeAccount, setActiveAccount] = useState<string>('astro.vance');
   const [currentUserName, setCurrentUserName] = useState<string>('Morgan Vance');
+  const [currentAstronautId, setCurrentAstronautId] = useState<number | null>(1);
   const [astronautProfile, setAstronautProfile] =
     useState<AstronautProfileData>(initialAstronautProfile);
 
   const setCurrentRole = (role: 'Astronaut' | 'Monitor') => {
     setCurrentRoleState(role);
     setActiveAccount(role === 'Monitor' ? 'monitor.rivera' : 'astro.vance');
+    if (role === 'Astronaut') {
+      setCurrentAstronautId(1);
+      setSelectedChatAstronautId(1);
+    } else {
+      setCurrentAstronautId(null);
+      setSelectedChatAstronautId(1);
+    }
   };
 
-  const switchAccount = (username: string) => {
-    const meta = accountCredentials[username];
-    if (!meta) return;
-    setActiveAccount(username);
-    setCurrentRoleState(meta.role);
-    if (meta.role === 'Astronaut') {
-      setSelectedChatAstronautId(meta.astronautId);
+  const logout = async () => {
+    try {
+      await api.logout();
+    } catch {
+      // Ignore network error on logout
     }
+    await signalRService.disconnect();
+    api.clearTokens();
+    setIsAuthenticated(false);
+    setActiveAccount('');
+    setCurrentUserName('');
+    setCurrentRoleState('Astronaut');
+    setCurrentAstronautId(null);
+    setChatMessages([]);
+  };
+
+  const login = async (
+    username: string,
+    password?: string
+  ): Promise<{ success: boolean; message?: string }> => {
+    try {
+      const meta = accountCredentials[username];
+      const pwd = password || meta?.password || 'Nasa@2026!';
+      const res = await api.login(username, pwd);
+
+      const resolvedRole = (res?.role as 'Astronaut' | 'Monitor') || meta?.role || 'Astronaut';
+      const resolvedName = res?.fullName || meta?.code || username;
+      const resolvedAstroId =
+        res?.astronautId != null
+          ? res.astronautId
+          : resolvedRole === 'Astronaut'
+          ? meta?.astronautId || 1
+          : null;
+
+      setIsAuthenticated(true);
+      setActiveAccount(username);
+      setCurrentRoleState(resolvedRole);
+      setCurrentUserName(resolvedName);
+      setCurrentAstronautId(resolvedAstroId);
+      if (resolvedAstroId) {
+        setSelectedChatAstronautId(resolvedAstroId);
+      }
+
+      await signalRService.connect();
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, message: err?.message || 'Login failed' };
+    }
+  };
+
+  const switchAccount = async (username: string): Promise<boolean> => {
+    await logout();
+    const res = await login(username);
+    return res.success;
   };
 
   const formatCardValue = (code: VitalCode, val: number): string => {
@@ -754,43 +788,90 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     });
 
     const unsubChat = signalRService.onChatReceived((incomingMsg) => {
-      setChatMessages((prev) => {
-        const exists = prev.some((m) => m.id === incomingMsg.id);
-        if (exists) return prev;
-        return [
-          ...prev,
-          {
-            id: incomingMsg.id,
-            clientGeneratedId: incomingMsg.clientGeneratedId,
-            astronautId: incomingMsg.astronautId,
-            senderId: incomingMsg.senderUserId,
-            senderName:
-              incomingMsg.senderFullName ||
-              (incomingMsg.senderRole === 'Monitor' ? 'د. كيسي ريفيرا' : 'مورغان فانس'),
-            senderRole: incomingMsg.senderRole,
-            content: incomingMsg.content,
-            sentAt: incomingMsg.sentAt,
-            isRead: incomingMsg.readAt != null,
-            readAt: incomingMsg.readAt,
-          },
-        ];
-      });
+      const activeThread =
+        currentRole === 'Monitor'
+          ? selectedChatAstronautId
+          : currentAstronautId || accountCredentials[activeAccount]?.astronautId || 1;
+
+      // STRICT ISOLATION: Only add message if it belongs to the active astronaut conversation thread!
+      if (incomingMsg.astronautId === activeThread) {
+        setChatMessages((prev) => {
+          // If matching optimistic clientGeneratedId exists, update it to server state
+          if (incomingMsg.clientGeneratedId) {
+            const clientIdx = prev.findIndex(
+              (m) => m.clientGeneratedId === incomingMsg.clientGeneratedId
+            );
+            if (clientIdx >= 0) {
+              const copy = [...prev];
+              copy[clientIdx] = {
+                ...copy[clientIdx],
+                id: incomingMsg.id,
+                sentAt: incomingMsg.sentAt,
+                deliveryState: 'sent',
+              };
+              return copy;
+            }
+          }
+          if (prev.some((m) => m.id === incomingMsg.id)) return prev;
+
+          const senderName =
+            incomingMsg.senderFullName ||
+            (incomingMsg.senderRole === 'Monitor'
+              ? 'د. كيسي ريفيرا'
+              : incomingMsg.astronautFullName || 'رائد فضاء');
+
+          return [
+            ...prev,
+            {
+              id: incomingMsg.id,
+              clientGeneratedId: incomingMsg.clientGeneratedId || crypto.randomUUID(),
+              astronautId: incomingMsg.astronautId,
+              astronautFullName: incomingMsg.astronautFullName,
+              senderUserId: incomingMsg.senderUserId,
+              senderName,
+              senderRole: incomingMsg.senderRole,
+              content: incomingMsg.content,
+              sentAt: incomingMsg.sentAt,
+              isRead: incomingMsg.readAt != null,
+              readAt: incomingMsg.readAt,
+              deliveryState: 'sent',
+            },
+          ];
+        });
+      }
+    });
+
+    const unsubChatRead = signalRService.onChatRead((readMsg) => {
+      setChatMessages((prev) =>
+        prev.map((m) =>
+          m.id === readMsg.id ||
+          (readMsg.clientGeneratedId && m.clientGeneratedId === readMsg.clientGeneratedId)
+            ? { ...m, isRead: true, readAt: readMsg.readAt || new Date().toISOString() }
+            : m
+        )
+      );
     });
 
     return () => {
       mounted = false;
       unsubAlert();
       unsubChat();
+      unsubChatRead();
     };
-  }, [activeAccount]);
+  }, [activeAccount, isAuthenticated, currentRole, selectedChatAstronautId, currentAstronautId]);
 
   // Load chat messages when selectedChatAstronautId changes
   useEffect(() => {
+    if (!isAuthenticated || !activeAccount) {
+      setChatMessages([]);
+      return;
+    }
     let mounted = true;
     const targetId =
       currentRole === 'Monitor'
         ? selectedChatAstronautId
-        : accountCredentials[activeAccount]?.astronautId || 1;
+        : currentAstronautId || accountCredentials[activeAccount]?.astronautId || 1;
+
     api
       .getChatMessages(targetId)
       .then((chatRes) => {
@@ -799,17 +880,21 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           setChatMessages(
             chatItems.map((m: any) => ({
               id: m.id,
-              clientGeneratedId: m.clientGeneratedId,
+              clientGeneratedId: m.clientGeneratedId || crypto.randomUUID(),
               astronautId: m.astronautId,
-              senderId: m.senderUserId,
+              astronautFullName: m.astronautFullName,
+              senderUserId: m.senderUserId,
               senderName:
                 m.senderFullName ||
-                (m.senderRole === 'Monitor' ? 'د. كيسي ريفيرا' : 'مورغان فانس'),
+                (m.senderRole === 'Monitor'
+                  ? 'د. كيسي ريفيرا'
+                  : m.astronautFullName || 'رائد فضاء'),
               senderRole: m.senderRole,
               content: m.content,
               sentAt: m.sentAt,
               isRead: m.readAt != null,
               readAt: m.readAt,
+              deliveryState: 'sent',
             }))
           );
         }
@@ -818,7 +903,7 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return () => {
       mounted = false;
     };
-  }, [selectedChatAstronautId, activeAccount, currentRole]);
+  }, [selectedChatAstronautId, activeAccount, currentRole, isAuthenticated, currentAstronautId]);
 
   const overallStatus: VitalSignStatus = (() => {
     const list = Object.values(vitals);
@@ -1131,7 +1216,7 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setAlerts((prev) => prev.filter((a) => a.id !== id));
   };
 
-  const sendChatMessage = (
+  const sendChatMessage = async (
     content: string,
     senderRole?: 'Astronaut' | 'Monitor',
     targetAstronautId?: number
@@ -1141,33 +1226,69 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       targetAstronautId ||
       (role === 'Monitor'
         ? selectedChatAstronautId
-        : accountCredentials[activeAccount]?.astronautId || 1);
-    const newMsg: ChatMessage = {
+        : currentAstronautId || accountCredentials[activeAccount]?.astronautId || 1);
+
+    const clientGenId = crypto.randomUUID();
+    const optimisticMsg: ChatMessage = {
       id: Date.now(),
-      clientGeneratedId: crypto.randomUUID(),
+      clientGeneratedId: clientGenId,
       astronautId: astroId,
-      senderId: role === 'Monitor' ? 'monitor-rivera' : activeAccount,
+      senderUserId: activeAccount,
       senderName:
         role === 'Monitor'
           ? 'د. كيسي ريفيرا'
-          : currentUserName || 'مورغان فانس',
+          : currentUserName || 'رائد فضاء',
       senderRole: role,
       content,
       sentAt: new Date().toISOString(),
       isRead: false,
+      deliveryState: 'sending',
     };
-    setChatMessages((prev) => [...prev, newMsg]);
-    api.sendChatMessage(content, astroId).catch(() => {});
+
+    const activeThreadId =
+      role === 'Monitor'
+        ? selectedChatAstronautId
+        : currentAstronautId || accountCredentials[activeAccount]?.astronautId || 1;
+
+    if (astroId === activeThreadId) {
+      setChatMessages((prev) => [...prev, optimisticMsg]);
+    }
+
+    try {
+      const savedMsg = await api.sendChatMessage(content, astroId, clientGenId);
+      if (savedMsg && savedMsg.id) {
+        setChatMessages((prev) =>
+          prev.map((m) =>
+            m.clientGeneratedId === clientGenId
+              ? {
+                  ...m,
+                  id: savedMsg.id,
+                  sentAt: savedMsg.sentAt || m.sentAt,
+                  senderUserId: savedMsg.senderUserId || m.senderUserId,
+                  deliveryState: 'sent',
+                }
+              : m
+          )
+        );
+      }
+    } catch {
+      setChatMessages((prev) =>
+        prev.map((m) =>
+          m.clientGeneratedId === clientGenId ? { ...m, deliveryState: 'failed' } : m
+        )
+      );
+    }
   };
 
   const markAllChatRead = () => {
     const nowIso = new Date().toISOString();
     setChatMessages((prev) =>
       prev.map((m) => {
-        if (!m.isRead && m.id < 1000000000) {
+        if (!m.isRead && m.senderRole !== currentRole && m.id < 1000000000) {
           api.markChatMessageRead(m.id).catch(() => {});
+          return { ...m, isRead: true, readAt: nowIso };
         }
-        return m.isRead ? m : { ...m, isRead: true, readAt: nowIso };
+        return m;
       })
     );
   };
@@ -1438,15 +1559,19 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         missions,
         offlineQueue,
         isOnline,
+        isAuthenticated,
         currentRole,
         activeAccount,
         currentUserCode:
           accountCredentials[activeAccount]?.code ||
           (currentRole === 'Monitor' ? 'MONITOR' : 'AST-001'),
         currentUserName,
+        currentAstronautId,
         astronautProfile,
         setCurrentRole,
         switchAccount,
+        login,
+        logout,
         recordVital,
         recordSleep,
         recordMood,

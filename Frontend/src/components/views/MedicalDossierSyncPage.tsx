@@ -240,37 +240,25 @@ export const MedicalDossierSyncPage: React.FC = () => {
             </button>
           </div>
 
-          {/* 4 Real Seeded Backend Accounts Switcher (/api/auth/login) */}
-          <div className="p-3.5 rounded-xl bg-slate-900/55 border border-white/10">
-            <p className="text-xs font-bold text-slate-300 mb-2">
-              {isAr ? 'تبديل الحساب النشط' : 'Switch Active Account'}
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {accountsList.map((acc) => {
-                const isSelected = activeAccount === acc.username;
-                return (
-                  <button
-                    key={acc.username}
-                    type="button"
-                    onClick={() => switchAccount(acc.username)}
-                    className={`py-2 px-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all text-start ${
-                      isSelected
-                        ? acc.isMonitor
-                          ? 'bg-cyan-600/30 border-cyan-400/50 text-white'
-                          : 'bg-blue-600/30 border-blue-400/50 text-white'
-                        : 'bg-slate-950/50 border-white/10 text-slate-300 hover:border-white/25'
-                    }`}
-                  >
-                    {acc.isMonitor ? (
-                      <Stethoscope className="w-3.5 h-3.5 text-cyan-300 shrink-0" />
-                    ) : (
-                      <UserCheck className="w-3.5 h-3.5 text-blue-300 shrink-0" />
-                    )}
-                    <span className="truncate">{isAr ? acc.nameAr : acc.nameEn}</span>
-                  </button>
-                );
-              })}
+          {/* Active Session Info (Enforces explicit logout to switch accounts) */}
+          <div className="p-3.5 rounded-xl bg-slate-900/55 border border-white/10 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center text-cyan-300 shrink-0">
+                <UserCheck className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-[11px] text-slate-400">
+                  {isAr ? 'الجلسة النشطة حالياً' : 'Current Active Session'}
+                </p>
+                <p className="text-xs font-bold text-white">
+                  {currentUserName || astronautProfile.fullName} ({astronautProfile.astronautCode || 'AST-001'})
+                </p>
+              </div>
             </div>
+
+            <span className="text-[10px] text-slate-400 font-mono bg-white/5 px-2 py-1 rounded border border-white/10">
+              {activeAccount}
+            </span>
           </div>
 
           {/* Sync Queue List */}

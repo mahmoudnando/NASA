@@ -8,10 +8,12 @@ import {
   CheckCircle2,
   AlertCircle,
   ArrowRight,
+  Lock,
+  Unlock,
+  Radio,
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useTelemetry } from '../../context/TelemetryContext';
-import { api } from '../../services/api';
 import { ActivePage } from '../../types/telemetry';
 
 interface LoginPageProps {
@@ -20,15 +22,24 @@ interface LoginPageProps {
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onSuccessNavigate }) => {
   const { language } = useLanguage();
-  const { activeAccount, switchAccount, currentRole, currentUserName } = useTelemetry();
+  const {
+    activeAccount,
+    isAuthenticated,
+    currentRole,
+    currentUserName,
+    currentUserCode,
+    login,
+    logout,
+  } = useTelemetry();
   const isAr = language === 'ar';
 
   const [username, setUsername] = useState('astro.vance');
   const [password, setPassword] = useState('Nasa@2026!');
   const [loading, setLoading] = useState(false);
-  const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(
-    null
-  );
+  const [statusMsg, setStatusMsg] = useState<{
+    type: 'success' | 'error' | 'warning';
+    text: string;
+  } | null>(null);
 
   const seededAccounts = [
     {
@@ -80,162 +91,191 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccessNavigate }) => {
   const handleManualLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim()) return;
+
+    if (isAuthenticated) {
+      setStatusMsg({
+        type: 'warning',
+        text: isAr
+          ? 'يجب تسجيل الخروج من الجلسة الحالية أولاً قبل تسجيل الدخول بحساب جديد.'
+          : 'You must log out of the current active session before signing into a new account.',
+      });
+      return;
+    }
+
     setLoading(true);
     setStatusMsg(null);
 
-    try {
+    const res = await login(username.trim(), password);
+    setLoading(false);
+
+    if (res.success) {
       const matchedSeed = seededAccounts.find(
-        (a) =>
-          a.username.toLowerCase() === username.trim().toLowerCase() ||
-          a.email.toLowerCase() === username.trim().toLowerCase()
+        (a) => a.username.toLowerCase() === username.trim().toLowerCase()
       );
-
-      if (matchedSeed) {
-        await switchAccount(
-          matchedSeed.username as
-            | 'astro.vance'
-            | 'astro.lee'
-            | 'astro.quinn'
-            | 'monitor.rivera'
-        );
-        setStatusMsg({
-          type: 'success',
-          text: isAr
-            ? `تم تسجيل الدخول بنجاح بحساب: ${matchedSeed.fullNameAr}`
-            : `Signed in successfully as ${matchedSeed.fullNameEn}`,
-        });
-        setLoading(false);
-        if (onSuccessNavigate) {
-          setTimeout(() => onSuccessNavigate(matchedSeed.targetPage), 600);
-        }
-        return;
+      setStatusMsg({
+        type: 'success',
+        text: isAr
+          ? `تم تسجيل الدخول بنجاح بحساب: ${matchedSeed?.fullNameAr || username}`
+          : `Signed in successfully as ${matchedSeed?.fullNameEn || username}`,
+      });
+      if (onSuccessNavigate) {
+        const dest =
+          matchedSeed?.targetPage || (currentRole === 'Monitor' ? 'monitor-dashboard' : 'dashboard');
+        setTimeout(() => onSuccessNavigate(dest), 600);
       }
-
-      const res = await api.login(username.trim(), password);
-      if (res?.token) {
-        setStatusMsg({
-          type: 'success',
-          text: isAr
-            ? `تم تسجيل الدخول بنجاح (${res.fullName || username})`
-            : `Authenticated as ${res.fullName || username}`,
-        });
-        if (onSuccessNavigate) {
-          setTimeout(
-            () =>
-              onSuccessNavigate(res.role === 'Monitor' ? 'monitor-dashboard' : 'dashboard'),
-            600
-          );
-        }
-      }
-    } catch {
+    } else {
       setStatusMsg({
         type: 'error',
         text: isAr
-          ? 'بيانات الدخول غير صحيحة. يرجى اختيار أحد الحسابات المعتمدة أو التأكد من كلمة المرور.'
-          : 'Invalid credentials. Please select one of the authorized accounts or verify password.',
+          ? 'بيانات الدخول غير صحيحة. يرجى التأكد من اسم المستخدم وكلمة المرور أو اختيار أحد الحسابات المعتمدة.'
+          : 'Invalid credentials. Please verify your username and password or select an authorized account.',
       });
-    } finally {
-      setLoading(false);
     }
   };
 
-  const handleQuickSelect = async (acc: (typeof seededAccounts)[number]) => {
+  const handleAccountCardClick = (acc: (typeof seededAccounts)[number]) => {
+    if (isAuthenticated) {
+      if (activeAccount === acc.username) {
+        setStatusMsg({
+          type: 'warning',
+          text: isAr
+            ? `أنت مسجل بالفعل بحساب ${acc.fullNameAr}.`
+            : `You are already signed in as ${acc.fullNameEn}.`,
+        });
+      } else {
+        setStatusMsg({
+          type: 'warning',
+          text: isAr
+            ? `أنت مسجل حالياً بحساب آخر. يجب الضغط على "تسجيل الخروج" أولاً لتتمكن من التبديل إلى حساب ${acc.fullNameAr} ومنع أي تداخل في الجلسات والمحادثات.`
+            : `You are currently signed in. Please log out first before switching to ${acc.fullNameEn} to prevent session and chat message collision.`,
+        });
+      }
+      return;
+    }
+
     setUsername(acc.username);
     setPassword('Nasa@2026!');
+    setStatusMsg({
+      type: 'success',
+      text: isAr
+        ? `تم تجهيز بيانات ${acc.fullNameAr} (${acc.roleLabelAr}). اضغط الآن على "تسجيل الدخول إلى النظام".`
+        : `Selected ${acc.fullNameEn} (${acc.roleLabelEn}). Click "Sign In to Console" to authenticate.`,
+    });
+  };
+
+  const handleLogoutClick = async () => {
     setLoading(true);
-    await switchAccount(acc.username);
+    await logout();
     setLoading(false);
     setStatusMsg({
       type: 'success',
       text: isAr
-        ? `تم التبديل إلى حساب: ${acc.fullNameAr} (${acc.roleLabelAr})`
-        : `Switched active session to ${acc.fullNameEn} (${acc.roleLabelEn})`,
-    });
-  };
-
-  const handleLogout = async () => {
-    try {
-      await api.logout();
-    } catch {
-      // Ignore network error on logout
-    }
-    setStatusMsg({
-      type: 'success',
-      text: isAr
-        ? 'تم إنهاء الجلسة الحالية، يمكنك اختيار حساب جديد للدخول'
-        : 'Session logged out. Select an account below to sign in.',
+        ? 'تم تسجيل الخروج بنجاح وإنهاء كافة الاتصالات السابقة. يمكنك الآن اختيار حساب جديد للدخول.'
+        : 'Logged out successfully. All prior sessions closed. Select an account below to sign in.',
     });
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 animate-fade-in">
-      {/* Left Column: Direct Credentials Sign-In Form (/api/auth/login & /api/auth/logout) */}
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 animate-fade-in">
+      {/* Left Column: Session Portal & Credentials Form */}
       <div className="lg:col-span-5 glass-panel rounded-[22px] p-5 flex flex-col justify-between gap-4">
         <div>
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2.5">
-              <div className="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-300">
-                <KeyRound className="w-5 h-5" />
+          {/* Header */}
+          <div className="flex items-center gap-2.5 pb-3.5 mb-4 border-b border-white/10">
+            <div className="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-400/30 flex items-center justify-center text-cyan-300">
+              <KeyRound className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white">
+                {isAr ? 'بوابة تسجيل الدخول والجلسات' : 'Mission Authentication Portal'}
+              </h3>
+              <p className="text-xs text-slate-300">
+                {isAr
+                  ? 'إدارة جلسة العمل وعزل الصلاحيات بدقة'
+                  : 'Manage active session and access boundaries'}
+              </p>
+            </div>
+          </div>
+
+          {/* Active Session Card OR Logged Out Notice */}
+          {isAuthenticated ? (
+            <div className="mb-4 p-4 rounded-2xl bg-slate-900/80 border border-emerald-400/40 shadow-[0_0_20px_rgba(16,185,129,0.15)] flex flex-col gap-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-300">
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      {isAr ? 'جلسة نشطة حالياً' : 'Active Session'}
+                    </span>
+                    <p className="text-sm font-extrabold text-white mt-1">
+                      {currentUserName}
+                    </p>
+                    <p className="text-xs text-cyan-300/90 font-medium">
+                      {currentRole === 'Monitor'
+                        ? isAr
+                          ? 'طبيب الرحلة (المراقب الطبي الأرضي)'
+                          : 'Flight Surgeon (Ground Medical Monitor)'
+                        : isAr
+                        ? `رائد فضاء (${currentUserCode || 'AST-001'})`
+                        : `Astronaut (${currentUserCode || 'AST-001'})`}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleLogoutClick}
+                  disabled={loading}
+                  title={isAr ? 'تسجيل الخروج' : 'Sign Out'}
+                  className="px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-400/40 text-rose-200 text-xs font-bold flex items-center gap-1.5 transition-all shadow cursor-pointer disabled:opacity-50"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>{isAr ? 'تسجيل الخروج' : 'Log Out'}</span>
+                </button>
               </div>
-              <div>
-                <h3 className="text-base font-bold text-white">
-                  {isAr ? 'بوابة تسجيل الدخول الموحدة' : 'Mission Authentication Portal'}
-                </h3>
-                <p className="text-xs text-slate-300">
+
+              <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-400/25 text-[11px] text-amber-200 leading-relaxed">
+                <p>
                   {isAr
-                    ? 'دخول رواد الفضاء وفريق الرقابة الطبية الأرضية'
-                    : 'Sign in as Astronaut Crew or Ground Flight Surgeon'}
+                    ? '⚠️ لتسجيل الدخول بحساب آخر أو تبديل الرائد/الطبيب، يجب تسجيل الخروج من الجلسة الحالية أولاً لضمان عدم تداخل البيانات والمحادثات.'
+                    : '⚠️ To log into another account or switch user, you must log out first to prevent telemetry and chat message collision.'}
                 </p>
               </div>
             </div>
-          </div>
-
-          {/* Current Active Session Banner (/api/auth/me) */}
-          <div className="mb-4 p-3.5 rounded-xl bg-slate-900/65 border border-cyan-400/30 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2.5">
-              <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" />
+          ) : (
+            <div className="mb-4 p-3.5 rounded-2xl bg-slate-900/60 border border-cyan-400/25 flex items-center gap-2.5">
+              <Unlock className="w-5 h-5 text-cyan-400 shrink-0" />
               <div>
-                <p className="text-[11px] text-slate-400">
-                  {isAr ? 'الجلسة النشطة حالياً' : 'Active Session'}
-                </p>
                 <p className="text-xs font-bold text-white">
-                  {currentUserName} •{' '}
-                  <span className="text-cyan-300">
-                    {currentRole === 'Monitor'
-                      ? isAr
-                        ? 'طبيب الرحلة (Monitor)'
-                        : 'Flight Surgeon (Monitor)'
-                      : isAr
-                      ? 'رائد فضاء (Astronaut)'
-                      : 'Astronaut'}
-                  </span>
+                  {isAr ? 'لا توجد جلسة نشطة حالياً' : 'No Active Session'}
+                </p>
+                <p className="text-[11px] text-slate-300">
+                  {isAr
+                    ? 'اختر أحد الحسابات المعتمدة من اليمين أو اكتب اسم المستخدم للدخول.'
+                    : 'Select an authorized account on the right or type credentials to sign in.'}
                 </p>
               </div>
             </div>
+          )}
 
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="px-2.5 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-400/30 text-rose-200 text-[11px] font-bold flex items-center gap-1"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>{isAr ? 'خروج' : 'Logout'}</span>
-            </button>
-          </div>
-
+          {/* Login Form */}
           <form onSubmit={handleManualLogin} className="space-y-3">
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                {isAr ? 'اسم المستخدم أو البريد الإلكتروني' : 'Username or Email'}
+                {isAr ? 'اسم المستخدم أو المعرّف' : 'Username / Account ID'}
               </label>
               <input
                 type="text"
                 required
                 dir="ltr"
+                disabled={isAuthenticated || loading}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="astro.vance | monitor.rivera"
-                className="w-full rounded-xl bg-slate-900/75 border border-white/15 px-3.5 py-2 text-xs font-bold text-white focus:outline-none focus:border-cyan-400"
+                className="w-full rounded-xl bg-slate-900/75 border border-white/15 px-3.5 py-2.5 text-xs font-bold text-white focus:outline-none focus:border-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
 
@@ -247,99 +287,122 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccessNavigate }) => {
                 type="password"
                 required
                 dir="ltr"
+                disabled={isAuthenticated || loading}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-xl bg-slate-900/75 border border-white/15 px-3.5 py-2 text-xs font-bold text-white focus:outline-none focus:border-cyan-400"
+                className="w-full rounded-xl bg-slate-900/75 border border-white/15 px-3.5 py-2.5 text-xs font-bold text-white focus:outline-none focus:border-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
 
             {statusMsg && (
               <div
-                className={`p-3 rounded-xl border text-xs flex items-center gap-2 ${
+                className={`p-3 rounded-xl border text-xs flex items-start gap-2 ${
                   statusMsg.type === 'success'
                     ? 'bg-emerald-500/15 border-emerald-400/30 text-emerald-200'
+                    : statusMsg.type === 'warning'
+                    ? 'bg-amber-500/15 border-amber-400/30 text-amber-200'
                     : 'bg-rose-500/15 border-rose-400/30 text-rose-200'
                 }`}
               >
                 {statusMsg.type === 'success' ? (
-                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-400" />
                 ) : (
-                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
                 )}
-                <span>{statusMsg.text}</span>
+                <span className="leading-relaxed">{statusMsg.text}</span>
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white font-bold text-sm shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              <KeyRound className="w-4 h-4" />
-              <span>
-                {loading
-                  ? isAr
-                    ? 'جاري التحقق من الهوية...'
-                    : 'Authenticating...'
-                  : isAr
-                  ? 'تسجيل الدخول إلى النظام'
-                  : 'Sign In to Console'}
-              </span>
-            </button>
+            {!isAuthenticated ? (
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white font-bold text-sm shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+              >
+                <KeyRound className="w-4 h-4" />
+                <span>
+                  {loading
+                    ? isAr
+                      ? 'جاري التحقق وبدء الجلسة...'
+                      : 'Authenticating...'
+                    : isAr
+                    ? 'تسجيل الدخول إلى النظام'
+                    : 'Sign In to Console'}
+                </span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleLogoutClick}
+                disabled={loading}
+                className="w-full py-2.5 px-4 rounded-xl bg-rose-600/30 hover:bg-rose-600/40 border border-rose-400/50 text-rose-200 font-bold text-sm shadow transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>
+                  {isAr
+                    ? 'تسجيل الخروج أولاً لتبديل الحساب'
+                    : 'Log Out First to Switch Account'}
+                </span>
+              </button>
+            )}
           </form>
         </div>
 
-        {onSuccessNavigate && (
+        {/* Navigation Shortcut to Active Dashboard */}
+        {isAuthenticated && onSuccessNavigate && (
           <button
             type="button"
             onClick={() =>
               onSuccessNavigate(currentRole === 'Monitor' ? 'monitor-dashboard' : 'dashboard')
             }
-            className="w-full py-2 px-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-cyan-300 flex items-center justify-center gap-1.5"
+            className="w-full py-2.5 px-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-xs font-bold text-cyan-300 flex items-center justify-center gap-1.5 transition-all"
           >
             <span>
               {currentRole === 'Monitor'
                 ? isAr
-                  ? 'الانتقال إلى لوحة تحكم طبيب الرحلة'
-                  : 'Open Flight Surgeon Dashboard'
+                  ? 'الانتقال إلى لوحة تحكم طبيب الرحلة النشطة'
+                  : 'Open Active Flight Surgeon Dashboard'
                 : isAr
-                ? 'الانتقال إلى لوحة تحكم رائد الفضاء'
-                : 'Open Astronaut Dashboard'}
+                ? 'الانتقال إلى لوحة تحكم رائد الفضاء النشطة'
+                : 'Open Active Astronaut Dashboard'}
             </span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         )}
       </div>
 
-      {/* Right Column: The 4 Official Seeded Accounts (3 Astronauts + 1 Ground Medical Monitor) */}
+      {/* Right Column: The 4 Seeded Official Accounts */}
       <div className="lg:col-span-7 glass-panel rounded-[22px] p-5 flex flex-col justify-between gap-4">
         <div>
           <div className="mb-4">
             <h3 className="text-base font-bold text-white">
               {isAr
                 ? 'الحسابات المعتمدة في النظام (رواد الفضاء + المراقب الطبي)'
-                : 'Authorized System Accounts (3 Astronauts + 1 Flight Surgeon)'}
+                : 'Authorized Mission Accounts (3 Astronauts + 1 Flight Surgeon)'}
             </h3>
-            <p className="text-xs text-slate-300 mt-0.5">
+            <p className="text-xs text-slate-300 mt-1 leading-relaxed">
               {isAr
-                ? 'انقر على أي حساب للتبديل الفوري وتجربة صلاحيات رائد الفضاء (Astronaut) أو طبيب الرحلة (Monitor)'
-                : 'Click any account card to switch sessions and experience Astronaut vs. Ground Monitor dashboards'}
+                ? 'لكل حساب جلسة مستقلة وقناة محادثة معزولة تماماً. عند تسجيل الدخول بحساب يجب تسجيل الخروج منه أولاً قبل الانتقال لأي حساب آخر لمنع تداخل البيانات.'
+                : 'Each account holds an isolated session and dedicated telemedicine chat thread. You must log out of the active account before signing in as another.'}
             </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {seededAccounts.map((acc) => {
-              const isSelected = activeAccount === acc.username;
+              const isSelected = activeAccount === acc.username && isAuthenticated;
               const isMonitor = acc.role === 'Monitor';
               return (
                 <div
                   key={acc.username}
-                  className={`p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
+                  onClick={() => handleAccountCardClick(acc)}
+                  className={`p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 cursor-pointer ${
                     isSelected
                       ? isMonitor
-                        ? 'bg-cyan-500/20 border-cyan-400/60 shadow-[0_0_24px_rgba(34,211,238,0.2)]'
-                        : 'bg-blue-500/20 border-blue-400/60 shadow-[0_0_24px_rgba(59,130,246,0.2)]'
-                      : 'bg-slate-900/55 border-white/10 hover:border-white/25'
+                        ? 'bg-cyan-500/20 border-cyan-400/70 shadow-[0_0_24px_rgba(34,211,238,0.25)] ring-1 ring-cyan-400/60'
+                        : 'bg-blue-500/20 border-blue-400/70 shadow-[0_0_24px_rgba(59,130,246,0.25)] ring-1 ring-blue-400/60'
+                      : isAuthenticated
+                      ? 'bg-slate-900/40 border-white/5 opacity-70 hover:opacity-100 hover:border-amber-400/40'
+                      : 'bg-slate-900/60 border-white/10 hover:border-cyan-400/50 hover:bg-slate-900/80 hover:shadow-lg'
                   }`}
                 >
                   <div>
@@ -359,74 +422,77 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccessNavigate }) => {
                           )}
                         </div>
                         <div>
-                          <h4 className="text-sm font-bold text-white">
+                          <p className="text-xs font-bold text-white">
                             {isAr ? acc.fullNameAr : acc.fullNameEn}
-                          </h4>
-                          <p className="text-[11px] text-slate-400" dir="ltr">
-                            @{acc.username}
                           </p>
+                          <span
+                            className={`text-[10px] font-semibold ${
+                              isMonitor ? 'text-cyan-300' : 'text-blue-300'
+                            }`}
+                          >
+                            {isAr ? acc.roleLabelAr : acc.roleLabelEn}
+                          </span>
                         </div>
                       </div>
 
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                          isMonitor
-                            ? 'bg-cyan-500/20 text-cyan-200 border-cyan-400/40'
-                            : 'bg-blue-500/20 text-blue-200 border-blue-400/40'
-                        }`}
-                      >
-                        {acc.code}
-                      </span>
+                      {isSelected ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/25 border border-emerald-400/40 text-emerald-300">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                          <span>{isAr ? 'نشط' : 'Active'}</span>
+                        </span>
+                      ) : isAuthenticated ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-white/10">
+                          <Lock className="w-2.5 h-2.5" />
+                          <span>{isAr ? 'مقفل' : 'Locked'}</span>
+                        </span>
+                      ) : null}
                     </div>
 
-                    <p className="text-xs text-slate-200 font-semibold">
-                      {isAr ? acc.roleLabelAr : acc.roleLabelEn}
-                    </p>
-                    <p className="text-[11px] text-slate-400 mt-0.5" dir="ltr">
+                    <p className="text-[11px] text-slate-400 font-mono mt-1" dir="ltr">
                       {acc.email}
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2 pt-2 border-t border-white/10">
-                    <button
-                      type="button"
-                      onClick={() => handleQuickSelect(acc)}
-                      className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-bold transition-all ${
+                  <div className="pt-2 border-t border-white/10 flex items-center justify-between text-[11px]">
+                    <span className="text-slate-400 font-mono">{acc.code}</span>
+                    <span
+                      className={`font-bold ${
                         isSelected
-                          ? 'bg-emerald-500/25 text-emerald-200 border border-emerald-400/40'
-                          : 'bg-white/10 hover:bg-white/15 text-white'
+                          ? 'text-emerald-300'
+                          : isAuthenticated
+                          ? 'text-slate-400'
+                          : 'text-cyan-300'
                       }`}
                     >
                       {isSelected
                         ? isAr
-                          ? 'الحساب النشط حالياً ✓'
-                          : 'Active Account ✓'
+                          ? 'الحساب النشط حالياً'
+                          : 'Current Active'
+                        : isAuthenticated
+                        ? isAr
+                          ? 'سجّل الخروج للتبديل'
+                          : 'Log Out to Switch'
                         : isAr
-                        ? 'دخول بهذا الحساب'
-                        : 'Sign In as User'}
-                    </button>
-
-                    {onSuccessNavigate && (
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          await handleQuickSelect(acc);
-                          onSuccessNavigate(acc.targetPage);
-                        }}
-                        className="py-1.5 px-2.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 text-xs font-bold"
-                        title={isAr ? 'فتح لوحة التحكم الخاصة به' : 'Open Role Dashboard'}
-                      >
-                        {isAr ? 'لوحته ←' : 'Dashboard →'}
-                      </button>
-                    )}
+                        ? 'انقر لتجهيز الدخول ←'
+                        : 'Click to select →'}
+                    </span>
                   </div>
                 </div>
               );
             })}
           </div>
         </div>
+
+        {/* Security / Isolation Assurance Footnote */}
+        <div className="p-3.5 rounded-2xl bg-cyan-950/30 border border-cyan-400/20 text-xs text-cyan-200/90 flex items-center gap-2.5">
+          <Radio className="w-4 h-4 text-cyan-400 shrink-0" />
+          <p className="leading-relaxed">
+            {isAr
+              ? 'تعتمد المنصة نظام مصادقة JWT مشفر مع عزل كامل لقنوات التيليمتري والمحادثات اللحظية عبر SignalR حسب معرّف رائد الفضاء ودور طبيب الرحلة.'
+              : 'The system enforces isolated JWT identity tokens and segregated SignalR telemetry/chat groups mapped strictly to astronaut IDs and monitor roles.'}
+          </p>
+        </div>
       </div>
     </div>
   );
 };
-

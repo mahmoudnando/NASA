@@ -175,16 +175,27 @@ export interface Recommendation {
 export interface ChatMessage {
   id: number;
   clientGeneratedId: string;
+  /** Thread key: every conversation belongs to exactly one astronaut. */
   astronautId: number;
-  senderId?: string;
-  senderUserId?: string;
+  astronautFullName?: string;
+  senderUserId: string;
   senderName?: string;
-  senderFullName?: string;
   senderRole: 'Astronaut' | 'Monitor';
   content: string;
   sentAt: string;
-  isRead?: boolean;
   readAt?: string | null;
+  isRead?: boolean;
+  /** Client-side delivery state for messages composed in this session. */
+  deliveryState?: 'sending' | 'sent' | 'failed';
+}
+
+export interface AuthSession {
+  userId: string;
+  username: string;
+  fullName: string;
+  role: 'Astronaut' | 'Monitor';
+  astronautId: number | null;
+  astronautCode: string | null;
 }
 
 export interface CrewMemberStatus {
