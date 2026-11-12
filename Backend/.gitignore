@@ -1,0 +1,38 @@
+## .NET & Build artifacts
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+## Visual Studio, Rider & VS Code
+.vs/
+.idea/
+.vscode/
+
+## Test Results & Coverage
+[Tt]est[Rr]esults/
+*.trx
+coverage/
+
+## Logs
+logs/
+*.log
+
+## Local Databases & Cache
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+*.mdf
+*.ldf
+
+## Environment & Secrets (Security Sensitive)
+appsettings.Development.json
+appsettings.*.local.json
+secrets.json
+*.local.json
+.env
+.env.*
